@@ -29,7 +29,7 @@ class User(models.Model):
 class Question(models.Model):
     CHOICES = (("Yes", "Yes"), ("No", "No"))
     text = models.CharField(max_length=300)
-    status = models.BooleanField(choices=CHOICES)
+    status = models.BooleanField(choices=CHOICES, default=False)
     category = models.ForeignKey(to=Category, on_delete=models.CASCADE)
     user = models.ForeignKey(to=User, on_delete=models.CASCADE)
 

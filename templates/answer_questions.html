@@ -1,0 +1,11 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<form method="post">{% csrf_token %}
+    <div>
+        <label for="id_answer_text">Answer:</label>
+        <textarea id="id_answer_text" name="answer_text" cols="40" rows="10"></textarea>
+    </div>
+    {{ questions_form._selected_action }}
+    <input type="submit" value="Submit answer">
+</form>
+{% endblock %}
