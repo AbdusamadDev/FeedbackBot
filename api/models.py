@@ -38,12 +38,12 @@ class Question(models.Model):
 
 
 class FAQ(models.Model):
-    question = models.CharField(max_length=100)
-    answer = models.CharField(max_length=100)
-    admin = models.ForeignKey(to=User, on_delete=models.CASCADE)  # Super Admin
+    question = models.CharField(max_length=200)
+    answer = models.TextField(max_length=700)
+    admin = models.ForeignKey(to=Admin, on_delete=models.CASCADE)  # Super Admin
 
     def __str__(self) -> str:
-        return f"{self.question}\n{self.answer}"
+        return f"{self.question}\n\n{self.answer}"
 
 
 class Answer(models.Model):
