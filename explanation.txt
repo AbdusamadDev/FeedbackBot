@@ -1,0 +1,17 @@
+update the way it gives options to the following way:
+
+instead of just adding 3 buttons, the question texts should be taken from database, and inside the questions for example "most common questions", there should be sent another more buttons as subcategory of that question - "most common questions", and those should be also taken from database as foreign key and database structure follows as:
+questions:
+question_text
+category_id
+date_created (created time of question)
+admin_id (admin from website)
+
+
+category:
+question_text (the smaller and more detailed  question added by admin)
+answer_id
+admin_id
+
+answer:
+question_id (which is in the base question, smaller and more detailed )
