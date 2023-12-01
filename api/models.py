@@ -8,6 +8,9 @@ class Category(models.Model):
     admin = models.ForeignKey(to=Admin, on_delete=models.CASCADE)  # Super Admin
     date_created = models.DateTimeField(auto_now_add=True)
 
+    def __str__(self) -> str:
+        return self.title
+
 
 class User(models.Model):
     fullname = models.CharField(max_length=100)
@@ -30,14 +33,23 @@ class Question(models.Model):
     category = models.ForeignKey(to=Category, on_delete=models.CASCADE)
     user = models.ForeignKey(to=User, on_delete=models.CASCADE)
 
+    def __str__(self) -> str:
+        return f"{self.text} | Javob berilgan: {self.status}"
+
 
 class FAQ(models.Model):
     question = models.CharField(max_length=100)
     answer = models.CharField(max_length=100)
     admin = models.ForeignKey(to=User, on_delete=models.CASCADE)  # Super Admin
 
+    def __str__(self) -> str:
+        return f"{self.question}\n{self.answer}"
+
 
 class Answer(models.Model):
     text = models.TextField(max_length=250)
     question = models.ForeignKey(to=Question, on_delete=models.CASCADE)
     admin = models.ForeignKey(to=Admin, on_delete=models.CASCADE)  # Causal Admin
+
+    def __str__(self) -> str:
+        return self.text
