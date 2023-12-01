@@ -33,8 +33,14 @@ class Question(models.Model):
     category = models.ForeignKey(to=Category, on_delete=models.CASCADE)
     user = models.ForeignKey(to=User, on_delete=models.CASCADE)
 
+    def is_answered(self):
+        return self.status == "Yes"
+
     def __str__(self) -> str:
         return f"{self.text} | Javob berilgan: {self.status}"
+
+    is_answered.boolean = True
+    is_answered.short_description = "Answered?"
 
 
 class FAQ(models.Model):

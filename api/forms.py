@@ -1,21 +1,16 @@
 from django import forms
-from .models import Answer, Question
 
 
-class AnswerForm(forms.ModelForm):
-    question = forms.ModelChoiceField(
-        queryset=Question.objects.filter(answer__isnull=True),
-        label="Unanswered Questions",
-        help_text="Select a question to answer",
-    )
-
-    class Meta:
-        model = Answer
-        fields = ["question", "text"]
+class AnswerQuestionForm(forms.Form):
+    _selected_action = forms.CharField(
+        widget=forms.MultipleHiddenInput
+    )  # Hidden field for selected questions
+    answer_text = forms.CharField(
+        widget=forms.Textarea, label="Answer"
+    )  # Textarea for the answer
 
     def __init__(self, *args, **kwargs):
-        super(AnswerForm, self).__init__(*args, **kwargs)
-        if self.instance and self.instance.question:
-            self.fields["question"].queryset = Question.objects.filter(
-                answer__isnull=True
-            ) | Question.objects.filter(pk=self.instance.question.pk)
+        super(AnswerQuestionForm, self).__init__(*args, **kwargs)
+        self.fields["answer_text"].widget.attrs.update(
+            {"class": "vLargeTextField", "cols": "40", "rows": "10"}
+        )

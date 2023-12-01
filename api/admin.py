@@ -4,8 +4,20 @@ from django.utils.html import format_html
 from django.shortcuts import render
 from django.urls import path, reverse
 
-from api.forms import AnswerForm, AnswerQuestionForm
-from api.models import Answer, FAQ, Category, Question
+from api.forms import AnswerQuestionForm
+from api.models import FAQ, Category, Question, User
+
+
+class UserAdmin(admin.ModelAdmin):
+    list_display = ("fullname", "phone_number", "region", "formatted_phone")
+    search_fields = ("fullname", "region")
+    list_filter = ("region",)
+    ordering = ("fullname",)
+
+    def formatted_phone(self, obj):
+        return f"{obj.phone_number[:4]}-{obj.phone_number[4:]}"
+
+    formatted_phone.short_description = "Phone"
 
 
 class CategoryAdmin(admin.ModelAdmin):
@@ -50,36 +62,9 @@ class FAQAdmin(admin.ModelAdmin):
     detailed_description.short_description = "FAQ Details"
 
 
-class AnswerAdmin(admin.ModelAdmin):
-    list_display = ("detailed_description",)
-    exclude = ("admin",)  # Exclude the admin field from the form
-    form = AnswerForm
-    list_display = ["question", "text"]
-
-    def get_queryset(self, request):
-        qs = super().get_queryset(request)
-        return qs.filter(question__status="No")
-
-    def save_model(self, request, obj, form, change):
-        if not obj.pk:  # Check if this is a new object being created
-            # Set the admin field to the current user
-            obj.admin = request.user
-        super().save_model(request, obj, form, change)
-
-    def detailed_description(self, obj):
-        return format_html(
-            "Answer Text: {}<br>Question: {}<br>Admin: {}",
-            obj.text,
-            obj.question.text,
-            obj.admin.username,
-        )
-
-    detailed_description.short_description = "Answer Details"
-
-
 class QuestionAdmin(admin.ModelAdmin):
     list_display = ["text", "is_answered", "user"]
-    ordering = ["is_answered"]
+    ordering = ["status"]
     actions = ["answer_questions"]
 
     def get_urls(self):
@@ -125,5 +110,5 @@ class QuestionAdmin(admin.ModelAdmin):
 
 admin.site.register(Category, CategoryAdmin)
 admin.site.register(FAQ, FAQAdmin)
-admin.site.register(Answer, AnswerAdmin)
 admin.site.register(Question, QuestionAdmin)
+admin.site.register(User, UserAdmin)
