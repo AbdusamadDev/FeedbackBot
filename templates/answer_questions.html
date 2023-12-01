@@ -1,11 +1,29 @@
-{% extends "admin/base_site.html" %}
+{% extends 'admin/base_site.html' %}
+{% load static i18n admin_urls %}
+
+{% block extrahead %}
+{{ block.super }}
+<link rel="stylesheet" type="text/css" href="{% static 'admin/css/forms.css' %}">
+<!-- Include any additional CSS files required by Jazzmin here -->
+{% endblock %}
+
 {% block content %}
-<form method="post">{% csrf_token %}
-    <div>
-        <label for="id_answer_text">Answer:</label>
-        <textarea id="id_answer_text" name="answer_text" cols="40" rows="10"></textarea>
+<div class="content-wrapper">
+    <div class="content">
+        <form method="post" id="answer_form" novalidate>{% csrf_token %}
+            <fieldset class="module aligned">
+                <div class="form-row field-text">
+                    <div>
+                        <label for="id_answer_text">{% trans 'Answer' %}:</label>
+                        <textarea id="id_answer_text" name="answer_text" class="vLargeTextField" cols="40"
+                            rows="10">{{ form.answer_text.value }}</textarea>
+                    </div>
+                </div>
+            </fieldset>
+            <div class="submit-row">
+                <input type="submit" value="{% trans 'Submit answer' %}" class="default" name="_save">
+            </div>
+        </form>
     </div>
-    {{ questions_form._selected_action }}
-    <input type="submit" value="Submit answer">
-</form>
+</div>
 {% endblock %}

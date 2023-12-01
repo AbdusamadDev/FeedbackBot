@@ -1,11 +1,16 @@
-from django.http import HttpResponseRedirect
-from django.contrib import admin
+from django.contrib import admin, messages
 from django.utils.html import format_html
-from django.shortcuts import render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import path, reverse
 
 from api.forms import AnswerQuestionForm
-from api.models import FAQ, Category, Question, User
+from api.models import (
+    FAQ,
+    Category,
+    Question,
+    User,
+    Answer,
+)
 
 
 class UserAdmin(admin.ModelAdmin):
@@ -62,53 +67,7 @@ class FAQAdmin(admin.ModelAdmin):
     detailed_description.short_description = "FAQ Details"
 
 
-class QuestionAdmin(admin.ModelAdmin):
-    list_display = ["text", "is_answered", "user"]
-    ordering = ["status"]
-    actions = ["answer_questions"]
-
-    def get_urls(self):
-        urls = super().get_urls()
-        custom_urls = [
-            path("answer/", self.admin_site.admin_view(self.answer_questions_view))
-        ]
-        return custom_urls + urls
-
-    def answer_questions_view(self, request):
-        # Handle the form submission
-        if request.method == "POST":
-            form = AnswerQuestionForm(request.POST)
-
-            if form.is_valid():
-                question_ids = request.POST.getlist("_selected_action")
-                answer_text = form.cleaned_data["answer_text"]
-
-                for question_id in question_ids:
-                    question = Question.objects.get(pk=question_id)
-                    # Logic to save the answer
-                    # Update the question's status or create an Answer object, etc.
-
-                self.message_user(request, "Questions answered successfully")
-                return HttpResponseRedirect(reverse("admin:app_question_changelist"))
-
-        else:
-            form = AnswerQuestionForm(
-                initial={
-                    "_selected_action": request.POST.getlist(admin.ACTION_CHECKBOX_NAME)
-                }
-            )
-
-        return render(request, "admin/answer_questions.html", {"questions_form": form})
-
-    def answer_questions(self, request, queryset):
-        return HttpResponseRedirect(
-            reverse("admin:app_question_answer", args=[queryset[0].id])
-        )
-
-    answer_questions.short_description = "Answer selected questions"
-
-
 admin.site.register(Category, CategoryAdmin)
 admin.site.register(FAQ, FAQAdmin)
-admin.site.register(Question, QuestionAdmin)
+admin.site.register(Question)
 admin.site.register(User, UserAdmin)

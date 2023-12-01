@@ -25,9 +25,12 @@ class User(models.Model):
     phone_number = models.CharField(validators=[phone_regex], max_length=17)
     region = models.CharField(max_length=50)
 
+    def __str__(self) -> str:
+        return f"User: {self.fullname} Phone number: {self.phone_number}"
+
 
 class Question(models.Model):
-    CHOICES = (("Yes", "Yes"), ("No", "No"))
+    CHOICES = ((True, "Yes"), (False, "No"))
     text = models.CharField(max_length=300)
     status = models.BooleanField(choices=CHOICES, default=False)
     category = models.ForeignKey(to=Category, on_delete=models.CASCADE)
