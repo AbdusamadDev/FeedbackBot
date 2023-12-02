@@ -31,15 +31,18 @@ def add_user_to_database(user_data):
 
     # Assuming 'fullname' is a combination of first, middle, and last name
     fullname = f"{user_data['first_name']} {user_data.get('middle_name', '')} {user_data['last_name']}".strip()
-    phone_number = user_data['phone_number']
-    region = user_data['region']
-    telegram_id = user_data['telegram_id']
-    telegram_username = user_data.get('telegram_username', '')  # Adjust as necessary
+    phone_number = user_data["phone_number"]
+    region = user_data["region"]
+    telegram_id = user_data["telegram_id"]
+    telegram_username = user_data.get("telegram_username", "")  # Adjust as necessary
 
-    cursor.execute("""
+    cursor.execute(
+        """
         INSERT INTO api_user (fullname, phone_number, region, telegram_id, telegram_username) 
         VALUES (?, ?, ?, ?, ?)
-    """, (fullname, phone_number, region, telegram_id, telegram_username))
+    """,
+        (fullname, phone_number, region, telegram_id, telegram_username),
+    )
 
     conn.commit()
     conn.close()
@@ -74,7 +77,11 @@ async def process_faq_option(query: types.CallbackQuery):
     faqs = fetch_faqs()
     for faq_id, question in faqs:
         inline_kb = InlineKeyboardMarkup()
-        inline_kb.add(InlineKeyboardButton("See Answer", callback_data=faq_callback.new(id=faq_id)))
+        inline_kb.add(
+            InlineKeyboardButton(
+                "See Answer", callback_data=faq_callback.new(id=faq_id)
+            )
+        )
         await query.message.reply(question, reply_markup=inline_kb)
     await query.answer()
 
@@ -144,8 +151,7 @@ async def process_first_name(message: types.Message):
 
 
 @dp.message_handler(
-    lambda message: "first_name" in user_data.get(message.from_user.id, {}) and
-                    "last_name" not in user_data.get(message.from_user.id, {})
+    lambda message: "last_name" not in user_data.get(message.from_user.id, {})
 )
 async def process_last_name(message: types.Message):
     user_data[message.from_user.id]["last_name"] = message.text
@@ -153,8 +159,8 @@ async def process_last_name(message: types.Message):
 
 
 @dp.message_handler(
-    lambda message: "last_name" in user_data.get(message.from_user.id, {}) and
-                    "middle_name" not in user_data.get(message.from_user.id, {})
+    lambda message: "last_name" in user_data.get(message.from_user.id, {})
+    and "middle_name" not in user_data.get(message.from_user.id, {})
 )
 async def process_middle_name(message: types.Message):
     user_data[message.from_user.id]["middle_name"] = message.text
@@ -170,14 +176,16 @@ async def process_phone_number(message: types.Message):
 
 
 @dp.message_handler(
-    lambda message: "phone_number" in user_data.get(message.from_user.id, {}) and
-                    "region" not in user_data.get(message.from_user.id, {})
+    lambda message: "phone_number" in user_data.get(message.from_user.id, {})
+    and "region" not in user_data.get(message.from_user.id, {})
 )
 async def process_region(message: types.Message):
     regions = fetch_regions()
     inline_kb = InlineKeyboardMarkup(row_width=2)
     for region in regions:
-        inline_kb.add(InlineKeyboardButton(region, callback_data=region_callback.new(name=region)))
+        inline_kb.add(
+            InlineKeyboardButton(region, callback_data=region_callback.new(name=region))
+        )
     await message.reply("Please select your region:", reply_markup=inline_kb)
 
 
@@ -196,11 +204,11 @@ async def process_region_selection(query: types.CallbackQuery, callback_data: di
     await present_options(query.message)
 
 
-@dp.callback_query_handler(option_callback.filter())
-async def process_option_selection(query: types.CallbackQuery, callback_data: dict):
-    option = callback_data["name"]
-    await query.message.reply(f"You selected {option}.")
-    await query.answer()
+# @dp.callback_query_handler(option_callback.filter())
+# async def process_option_selection(query: types.CallbackQuery, callback_data: dict):
+#     option = callback_data["name"]
+#     await query.message.reply(f"You selected {option}.")
+#     await query.answer()
 
 
 @dp.message_handler(lambda message: message.text in ["FAQ", "Categories", "Back"])
@@ -231,7 +239,7 @@ def fetch_categories():
     """
     conn = sqlite3.connect("../db.sqlite3")  # Adjust path if needed
     cursor = conn.cursor()
-    cursor.execute("SELECT name FROM api_category")  # Fetch the title of each category
+    cursor.execute("SELECT title FROM api_category")  # Fetch the title of each category
     categories = cursor.fetchall()
     conn.close()
     return [category[0] for category in categories]
@@ -240,9 +248,120 @@ def fetch_categories():
 @dp.callback_query_handler(option_callback.filter(name="Categories"))
 async def process_categories_option(query: types.CallbackQuery):
     categories = fetch_categories()
-    message_text = "Admin Created Categories:\n" + "\n".join(categories)
-    await query.message.reply(message_text)
+
+    if not categories:
+        await query.answer("No categories found in the database.")
+        return
+
+    message_text = "Select a category by its ID:\n"
+    inline_kb = InlineKeyboardMarkup(row_width=1)
+
+    for index, category_name in enumerate(categories, start=1):
+        category_id_button = InlineKeyboardButton(
+            f"{index}. {category_name}", callback_data=f"category_{index}"
+        )
+        inline_kb.add(category_id_button)
+
+    await query.message.reply(message_text, reply_markup=inline_kb)
     await query.answer()
+
+
+def create_new_question(text, status, category_id, user_id):
+    """
+    Create a new question in the SQLite3 database.
+    """
+    conn = sqlite3.connect("../db.sqlite3")  # Adjust path if needed
+    cursor = conn.cursor()
+
+    # Assuming your table is named 'api_question'
+    cursor.execute(
+        """
+        INSERT INTO api_question (text, status, category_id, user_id)
+        VALUES (?, ?, ?, ?)
+    """,
+        (text, status, category_id, user_id),
+    )
+
+    conn.commit()
+    conn.close()
+
+
+@dp.callback_query_handler(lambda query: query.data.startswith("category_"))
+async def process_category_selection(query: types.CallbackQuery):
+    category_index = int(query.data.split("_")[1])
+    categories = fetch_categories()
+
+    if 1 <= category_index <= len(categories):
+        # Get the selected category name
+        selected_category = categories[category_index - 1]
+
+        # Get the user's Telegram ID
+        user_telegram_id = query.from_user.id
+
+        # Get the corresponding user database ID
+        user_database_id = get_user_database_id(user_telegram_id)
+
+        if user_database_id is not None:
+            # Prompt the user to enter their question
+            await query.message.reply(
+                f"You selected category: {selected_category}. Please enter your question."
+            )
+
+            # Update user_data to track the user's state (awaiting_question and category_id)
+            user_data[user_telegram_id] = {
+                "category_id": category_index,
+                "awaiting_question": True,
+            }
+
+        else:
+            await query.answer("User not found in the database.")
+    else:
+        await query.answer("Invalid category selection.")
+
+
+@dp.message_handler(
+    lambda message: user_data.get(message.from_user.id, {}).get("awaiting_question")
+)
+async def process_user_question(message: types.Message):
+    user_telegram_id = message.from_user.id
+    user_data_entry = user_data.get(user_telegram_id, {})
+
+    if "category_id" in user_data_entry and "awaiting_question" in user_data_entry:
+        # Get the selected category ID and clear the user's state
+        category_id = user_data_entry["category_id"]
+        user_data_entry.pop("category_id")
+        user_data_entry.pop("awaiting_question")
+
+        # Get the user's database ID
+        user_database_id = get_user_database_id(user_telegram_id)
+        print(f"\n\n\n\n\n\n\n{message.text}\n{category_id}\n{user_database_id}")
+
+        # Create a new question in the SQLite3 database
+        create_new_question(message.text, False, category_id, user_database_id)
+
+        await message.reply("Your question has been submitted!")
+
+    else:
+        await message.reply("Invalid request or session expired.")
+
+
+def get_user_database_id(telegram_id):
+    """
+    Retrieve the user's database ID based on their Telegram ID using SQLite.
+    """
+    conn = sqlite3.connect("../db.sqlite3")  # Adjust path if needed
+    cursor = conn.cursor()
+
+    # Assuming your 'api_user' table has a 'telegram_id' column
+    cursor.execute("SELECT id FROM api_user WHERE telegram_id = ?", (telegram_id,))
+    result = cursor.fetchone()
+
+    conn.close()
+
+    if result:
+        return result[0]  # Assuming 'id' is the database ID field
+    else:
+        return None
 
 
 if __name__ == "__main__":
