@@ -1,15 +1,16 @@
 import sqlite3
 from aiogram import Bot, Dispatcher, types
 from aiogram.contrib.middlewares.logging import LoggingMiddleware
-from aiogram.types import (
-    InlineKeyboardMarkup,
-    InlineKeyboardButton,
-    ReplyKeyboardRemove,
-)
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils import executor
 from aiogram.utils.callback_data import CallbackData
 import logging
 
+logging.basicConfig(level=logging.INFO)
+
+user_data = {}
+option_callback = CallbackData("option", "name")
+faq_callback = CallbackData("faq", "id")
 logging.basicConfig(level=logging.INFO)
 
 API_TOKEN = "6195275934:AAEngBypgfNw3SwcV9uV_jdatZtMvojF9cs"
@@ -18,25 +19,7 @@ bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
 dp.middleware.setup(LoggingMiddleware())
 
-user_data = {}
 region_callback = CallbackData("region", "name")
-option_callback = CallbackData("option", "name")
-uzbekistan_regions = [
-    "Andijan",
-    "Bukhara",
-    "Fergana",
-    "Jizzakh",
-    "Khorezm",
-    "Namangan",
-    "Navoiy",
-    "Qashqadaryo",
-    "Samarkand",
-    "Sirdaryo",
-    "Surkhandarya",
-    "Tashkent",
-    "Tashkent City",
-    "Karakalpakstan",
-]
 
 
 def add_user_to_database(user_data):
@@ -62,7 +45,16 @@ def add_user_to_database(user_data):
     conn.close()
 
 
-faq_callback = CallbackData("faq", "id")
+def fetch_regions():
+    """
+    Fetch all regions from the database.
+    """
+    conn = sqlite3.connect("../db.sqlite3")
+    cursor = conn.cursor()
+    cursor.execute("SELECT name FROM api_regions")
+    regions = cursor.fetchall()
+    conn.close()
+    return [region[0] for region in regions]
 
 
 def fetch_faqs():
@@ -112,17 +104,9 @@ def is_user_in_database(telegram_id):
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM api_user WHERE telegram_id = ?", (telegram_id,))
     user = cursor.fetchone()
+    logging.info("User: " + str(user))
     conn.close()
     return user is not None
-
-
-@dp.message_handler(commands=["start"])
-async def process_start_command(message: types.Message):
-    if is_user_in_database(message.from_user.id):
-        await present_options(message)
-    else:
-        user_data[message.from_user.id] = {}
-        await message.reply("Hi!\nPlease enter your first name:")
 
 
 async def present_options(message: types.Message):
@@ -141,16 +125,27 @@ async def present_options(message: types.Message):
     await message.reply("Please select an option:", reply_markup=inline_kb)
 
 
+@dp.message_handler(commands=["start"])
+async def process_start_command(message: types.Message):
+    if is_user_in_database(message.from_user.id):
+        await message.reply("What questions do you have today?")
+        await present_options(message)
+    else:
+        user_data[message.from_user.id] = {}
+        await message.reply("Hi!\nPlease enter your first name:")
+
+
 @dp.message_handler(
     lambda message: "first_name" not in user_data.get(message.from_user.id, {})
 )
 async def process_first_name(message: types.Message):
-    user_data[message.from_user.id] = {"first_name": message.text}
+    user_data[message.from_user.id]["first_name"] = message.text
     await message.reply("Please enter your last name:")
 
 
 @dp.message_handler(
-    lambda message: "last_name" not in user_data.get(message.from_user.id, {})
+    lambda message: "first_name" in user_data.get(message.from_user.id, {}) and
+                    "last_name" not in user_data.get(message.from_user.id, {})
 )
 async def process_last_name(message: types.Message):
     user_data[message.from_user.id]["last_name"] = message.text
@@ -158,7 +153,8 @@ async def process_last_name(message: types.Message):
 
 
 @dp.message_handler(
-    lambda message: "middle_name" not in user_data.get(message.from_user.id, {})
+    lambda message: "last_name" in user_data.get(message.from_user.id, {}) and
+                    "middle_name" not in user_data.get(message.from_user.id, {})
 )
 async def process_middle_name(message: types.Message):
     user_data[message.from_user.id]["middle_name"] = message.text
@@ -170,12 +166,19 @@ async def process_middle_name(message: types.Message):
 )
 async def process_phone_number(message: types.Message):
     user_data[message.from_user.id]["phone_number"] = message.text
+    await process_region(message)  # Call process_region directly
+
+
+@dp.message_handler(
+    lambda message: "phone_number" in user_data.get(message.from_user.id, {}) and
+                    "region" not in user_data.get(message.from_user.id, {})
+)
+async def process_region(message: types.Message):
+    regions = fetch_regions()
     inline_kb = InlineKeyboardMarkup(row_width=2)
-    for region in uzbekistan_regions:
-        inline_kb.add(
-            InlineKeyboardButton(region, callback_data=region_callback.new(name=region))
-        )
-    await message.reply("Please choose your region:", reply_markup=inline_kb)
+    for region in regions:
+        inline_kb.add(InlineKeyboardButton(region, callback_data=region_callback.new(name=region)))
+    await message.reply("Please select your region:", reply_markup=inline_kb)
 
 
 @dp.callback_query_handler(region_callback.filter())
@@ -184,7 +187,12 @@ async def process_region_selection(query: types.CallbackQuery, callback_data: di
     user_data[query.from_user.id]["region"] = region
     user_data[query.from_user.id]["telegram_id"] = query.from_user.id
     user_data[query.from_user.id]["telegram_username"] = query.from_user.username
+
+    # Save user data to database
     add_user_to_database(user_data[query.from_user.id])
+    del user_data[query.from_user.id]  # Clear user data after saving
+
+    await query.message.reply("Region selected: " + region)
     await present_options(query.message)
 
 
@@ -215,6 +223,26 @@ async def process_description(message: types.Message):
         f"Description: {data.get('description', 'Not provided')}"
     )
     await message.answer(response)
+
+
+def fetch_categories():
+    """
+    Fetch all categories from the database.
+    """
+    conn = sqlite3.connect("../db.sqlite3")  # Adjust path if needed
+    cursor = conn.cursor()
+    cursor.execute("SELECT name FROM api_category")  # Fetch the title of each category
+    categories = cursor.fetchall()
+    conn.close()
+    return [category[0] for category in categories]
+
+
+@dp.callback_query_handler(option_callback.filter(name="Categories"))
+async def process_categories_option(query: types.CallbackQuery):
+    categories = fetch_categories()
+    message_text = "Admin Created Categories:\n" + "\n".join(categories)
+    await query.message.reply(message_text)
+    await query.answer()
 
 
 if __name__ == "__main__":

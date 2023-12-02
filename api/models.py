@@ -9,7 +9,7 @@ class Category(models.Model):
     date_created = models.DateTimeField(auto_now_add=True)
 
     def __str__(self) -> str:
-        return self.titlea
+        return self.title
 
 
 class User(models.Model):
@@ -64,3 +64,11 @@ class Answer(models.Model):
 
     def __str__(self) -> str:
         return self.text
+
+
+class Regions(models.Model):
+    name = models.CharField(max_length=120)
+    admin = models.ForeignKey(to=Admin, on_delete=models.CASCADE)
+
+    def __str__(self):
+        return f"Region: {self.name} by Admin: {self.admin}"

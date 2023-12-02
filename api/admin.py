@@ -5,6 +5,7 @@ from api.models import (
     FAQ,
     Category,
     User,
+    Regions,
 )
 
 
@@ -65,3 +66,4 @@ class FAQAdmin(admin.ModelAdmin):
 admin.site.register(Category, CategoryAdmin)
 admin.site.register(User, UserAdmin)
 admin.site.register(FAQ, FAQAdmin)
+admin.site.register(Regions)
