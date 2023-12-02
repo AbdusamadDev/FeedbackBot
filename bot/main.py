@@ -8,6 +8,9 @@ from aiogram.types import (
 )
 from aiogram.utils import executor
 from aiogram.utils.callback_data import CallbackData
+import logging
+
+logging.basicConfig(level=logging.INFO)
 
 API_TOKEN = "6195275934:AAEngBypgfNw3SwcV9uV_jdatZtMvojF9cs"
 
@@ -36,10 +39,78 @@ uzbekistan_regions = [
 ]
 
 
-def is_user_in_database(telegram_id):
-    conn = sqlite3.connect("db.sqlite3")
+def add_user_to_database(user_data):
+    """
+    Adds a user to the database using the provided user data.
+    """
+    conn = sqlite3.connect("../db.sqlite3")  # Adjust path if needed
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM user WHERE telegram_id = ?", (telegram_id,))
+
+    # Assuming 'fullname' is a combination of first, middle, and last name
+    fullname = f"{user_data['first_name']} {user_data.get('middle_name', '')} {user_data['last_name']}".strip()
+    phone_number = user_data['phone_number']
+    region = user_data['region']
+    telegram_id = user_data['telegram_id']
+    telegram_username = user_data.get('telegram_username', '')  # Adjust as necessary
+
+    cursor.execute("""
+        INSERT INTO api_user (fullname, phone_number, region, telegram_id, telegram_username) 
+        VALUES (?, ?, ?, ?, ?)
+    """, (fullname, phone_number, region, telegram_id, telegram_username))
+
+    conn.commit()
+    conn.close()
+
+
+faq_callback = CallbackData("faq", "id")
+
+
+def fetch_faqs():
+    """
+    Fetch all FAQ entries from the database.
+    """
+    conn = sqlite3.connect("../db.sqlite3")
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, question FROM api_faq")
+    faqs = cursor.fetchall()
+    conn.close()
+    return faqs
+
+
+@dp.callback_query_handler(option_callback.filter(name="FAQ"))
+async def process_faq_option(query: types.CallbackQuery):
+    faqs = fetch_faqs()
+    for faq_id, question in faqs:
+        inline_kb = InlineKeyboardMarkup()
+        inline_kb.add(InlineKeyboardButton("See Answer", callback_data=faq_callback.new(id=faq_id)))
+        await query.message.reply(question, reply_markup=inline_kb)
+    await query.answer()
+
+
+def fetch_faq_answer(faq_id):
+    """
+    Fetch the answer for a specific FAQ from the database.
+    """
+    conn = sqlite3.connect("../db.sqlite3")
+    cursor = conn.cursor()
+    cursor.execute("SELECT answer FROM api_faq WHERE id = ?", (faq_id,))
+    answer = cursor.fetchone()
+    conn.close()
+    return answer[0] if answer else "No answer found."
+
+
+@dp.callback_query_handler(faq_callback.filter())
+async def process_faq_answer(query: types.CallbackQuery, callback_data: dict):
+    faq_id = int(callback_data["id"])
+    answer = fetch_faq_answer(faq_id)
+    await query.message.reply(answer)
+    await query.answer()
+
+
+def is_user_in_database(telegram_id):
+    conn = sqlite3.connect("../db.sqlite3")
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM api_user WHERE telegram_id = ?", (telegram_id,))
     user = cursor.fetchone()
     conn.close()
     return user is not None
@@ -111,6 +182,9 @@ async def process_phone_number(message: types.Message):
 async def process_region_selection(query: types.CallbackQuery, callback_data: dict):
     region = callback_data["name"]
     user_data[query.from_user.id]["region"] = region
+    user_data[query.from_user.id]["telegram_id"] = query.from_user.id
+    user_data[query.from_user.id]["telegram_username"] = query.from_user.username
+    add_user_to_database(user_data[query.from_user.id])
     await present_options(query.message)
 
 
