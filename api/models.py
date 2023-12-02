@@ -24,6 +24,8 @@ class User(models.Model):
 
     phone_number = models.CharField(validators=[phone_regex], max_length=17)
     region = models.CharField(max_length=50)
+    telegram_id = models.IntegerField(default=0)
+    telegram_username = models.CharField(max_length=60, default="asda")
 
     def __str__(self) -> str:
         return f"User: {self.fullname} Phone number: {self.phone_number}"

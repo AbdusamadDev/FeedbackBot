@@ -1,0 +1,9 @@
+.row-answered {
+    background-color: #d4edda !important;
+    /* green */
+}
+
+.row-not-answered {
+    background-color: #f8d7da !important;
+    /* red */
+}

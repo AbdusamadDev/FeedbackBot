@@ -1,17 +1,225 @@
-update the way it gives options to the following way:
+in the picture there is admin panel powered by django for backend and frontend in jazzmin 3d party library of django. I got the real problem I am suffering. There are both questions with answers and questions which is not answered are in the same place and also there is no any button or link at the end of each record's frontend card which is named as "Answer to this question". and that button or link should redirect to the answer creation page of admin panel (the page should redirect to answer page for creating answer of that clicked question). and the answer model isnt in admin panel as well. so the thing you should do:
 
-instead of just adding 3 buttons, the question texts should be taken from database, and inside the questions for example "most common questions", there should be sent another more buttons as subcategory of that question - "most common questions", and those should be also taken from database as foreign key and database structure follows as:
-questions:
-question_text
-category_id
-date_created (created time of question)
-admin_id (admin from website)
+____ Add Answer model to Admin panel
+____ Redirect to the answer creation page for the chosen question
+____ Category CRUD and FAQ CRUD must only be available for super admin
+
+here is my whole code for you to update parts
+_______________________________________________________________________________________________
+from rest_framework import viewsets, permissions
+
+from api.models import Category, User, Question, FAQ, Answer
+from api.permissions import IsSuperAdmin, IsAdminUserOrReadOnly
+from api.serializers import (
+    CategorySerializer,
+    QuestionSerializer,
+    FAQSerializer,
+    AnswerSerializer,
+)
 
 
-category:
-question_text (the smaller and more detailed  question added by admin)
-answer_id
-admin_id
+# ViewSets
+class CategoryViewSet(viewsets.ModelViewSet):
+    queryset = Category.objects.all()
+    serializer_class = CategorySerializer
+    permission_classes = [IsSuperAdmin]
 
-answer:
-question_id (which is in the base question, smaller and more detailed )
+
+class QuestionViewSet(viewsets.ModelViewSet):
+    queryset = Question.objects.all()
+    serializer_class = QuestionSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+
+class FAQViewSet(viewsets.ModelViewSet):
+    queryset = FAQ.objects.all()
+    serializer_class = FAQSerializer
+    permission_classes = [IsSuperAdmin]
+
+
+class AnswerViewSet(viewsets.ModelViewSet):
+    queryset = Answer.objects.all()
+    serializer_class = AnswerSerializer
+    permission_classes = [IsAdminUserOrReadOnly]
+
+
+
+
+
+
+
+
+from rest_framework import permissions
+
+
+# Custom permission classes
+class IsSuperAdmin(permissions.BasePermission):
+    """
+    Allows access only to super admin users.
+    """
+
+    def has_permission(self, request, view):
+        return request.user and request.user.is_superuser
+
+
+class IsAdminUserOrReadOnly(permissions.BasePermission):
+    """
+    Allows write permissions only to admin users, read-only for others.
+    """
+
+    def has_permission(self, request, view):
+        if request.method in permissions.SAFE_METHODS:
+            return True
+        return request.user and request.user.is_staff
+
+
+
+
+
+
+
+
+from django.db import models
+from django.contrib.auth.models import User as Admin
+from django.core.validators import RegexValidator
+
+
+class Category(models.Model):
+    title = models.CharField(max_length=150)
+    admin = models.ForeignKey(to=Admin, on_delete=models.CASCADE)  # Super Admin
+    date_created = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self) -> str:
+        return self.title
+
+
+class User(models.Model):
+    fullname = models.CharField(max_length=100)
+    phone_regex = RegexValidator(
+        regex=r"^\+\d{8,15}$",
+        message="""
+            Phone number must be entered in the format: '+9981234567'. 
+            Up to 15 digits allowed.
+        """,
+    )
+
+    phone_number = models.CharField(validators=[phone_regex], max_length=17)
+    region = models.CharField(max_length=50)
+
+    def __str__(self) -> str:
+        return f"User: {self.fullname} Phone number: {self.phone_number}"
+
+
+class Question(models.Model):
+    CHOICES = ((True, "Yes"), (False, "No"))
+    text = models.CharField(max_length=300)
+    status = models.BooleanField(choices=CHOICES, default=False)
+    category = models.ForeignKey(to=Category, on_delete=models.CASCADE)
+    user = models.ForeignKey(to=User, on_delete=models.CASCADE)
+
+    def is_answered(self):
+        return self.status == "Yes"
+
+    def __str__(self) -> str:
+        return f"{self.text} | Javob berilgan: {self.status}"
+
+    is_answered.boolean = True
+    is_answered.short_description = "Answered?"
+
+
+class FAQ(models.Model):
+    question = models.CharField(max_length=200)
+    answer = models.TextField(max_length=700)
+    admin = models.ForeignKey(to=Admin, on_delete=models.CASCADE)  # Super Admin
+
+    def __str__(self) -> str:
+        return f"{self.question}\n\n{self.answer}"
+
+
+class Answer(models.Model):
+    text = models.TextField(max_length=250)
+    question = models.ForeignKey(to=Question, on_delete=models.CASCADE)
+    admin = models.ForeignKey(to=Admin, on_delete=models.CASCADE)  # Causal Admin
+
+    def __str__(self) -> str:
+        return self.text
+
+
+
+
+
+
+
+
+from django.contrib import admin, messages
+from django.utils.html import format_html
+from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import path, reverse
+
+from api.models import (
+    FAQ,
+    Category,
+    Question,
+    User,
+    Answer,
+)
+
+
+class UserAdmin(admin.ModelAdmin):
+    list_display = ("fullname", "phone_number", "region", "formatted_phone")
+    search_fields = ("fullname", "region")
+    list_filter = ("region",)
+    ordering = ("fullname",)
+
+    def formatted_phone(self, obj):
+        return f"{obj.phone_number[:4]}-{obj.phone_number[4:]}"
+
+    formatted_phone.short_description = "Phone"
+
+
+class CategoryAdmin(admin.ModelAdmin):
+    list_display = ("detailed_description",)
+    exclude = ("admin",)  # Exclude the admin field from the form
+
+    def save_model(self, request, obj, form, change):
+        if not obj.pk:  # Check if this is a new object being created
+            # Set the admin field to the current user
+            obj.admin = request.user
+        super().save_model(request, obj, form, change)
+
+    def detailed_description(self, obj):
+        return format_html(
+            "Title: {}<br>Admin: {}<br>Date Created: {}",
+            obj.title,
+            obj.admin.username,
+            obj.date_created.strftime("%Y-%m-%d"),
+        )
+
+    detailed_description.short_description = "Category Details"
+
+
+class FAQAdmin(admin.ModelAdmin):
+    list_display = ("detailed_description",)
+    exclude = ("admin",)  # Exclude the admin field from the form
+
+    def save_model(self, request, obj, form, change):
+        if not obj.pk:  # Check if this is a new object being created
+            # Set the admin field to the current user
+            obj.admin = request.user
+        super().save_model(request, obj, form, change)
+
+    def detailed_description(self, obj):
+        return format_html(
+            "Question: {}<br>Answer: {}<br><br>Created by {}",
+            obj.question,
+            obj.answer,
+            obj.admin.username,
+        )
+
+    detailed_description.short_description = "FAQ Details"
+
+
+admin.site.register(Category, CategoryAdmin)
+admin.site.register(FAQ, FAQAdmin)
+admin.site.register(Question)
+admin.site.register(User, UserAdmin)
