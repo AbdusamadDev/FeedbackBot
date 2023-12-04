@@ -8,6 +8,7 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.dispatcher import FSMContext
 from aiogram.utils import executor
 import sqlite3
+import re
 
 
 # user_id = 2003049919
@@ -16,6 +17,9 @@ API_TOKEN = "6195275934:AAEngBypgfNw3SwcV9uV_jdatZtMvojF9cs"
 user_data = {}
 option_callback = CallbackData("option", "name")
 faq_callback = CallbackData("faq", "id")
+view_questions_callback = CallbackData("admin_action", "action")
+view_users_callback = CallbackData("admin_action", "action")
+view_faqs_callback = CallbackData("admin_action", "action")
 bot = Bot(token=API_TOKEN)
 storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
@@ -40,8 +44,6 @@ dp.filters_factory.bind(UserIsAdminFilter)
 
 class Registration(StatesGroup):
     first_name = State()
-    last_name = State()
-    middle_name = State()
     phone_number = State()
     region = State()
 
@@ -150,7 +152,7 @@ def add_user_to_database(user_data):
     """
     conn = sqlite3.connect("../db.sqlite3")
     cursor = conn.cursor()
-    fullname = f"{user_data['first_name']} {user_data.get('middle_name', '')} {user_data['last_name']}".strip()
+    fullname = user_data["first_name"]
     phone_number = user_data["phone_number"]
     region = user_data["region"]
     telegram_id = user_data["telegram_id"]
@@ -261,7 +263,26 @@ async def present_options(message: types.Message):
 
 @dp.message_handler(commands=["start"], state=None)
 async def process_start_command(message: types.Message, state: FSMContext):
-    if is_user_in_database(message.from_user.id):
+    user_id = message.from_user.id
+    if user_id in ADMIN_IDS:
+        inline_kb = InlineKeyboardMarkup(row_width=1)
+        inline_kb.add(
+            InlineKeyboardButton(
+                "View Questions",
+                callback_data=view_questions_callback.new(action="view_questions"),
+            ),
+            InlineKeyboardButton(
+                "View Users", callback_data=view_users_callback.new(action="view_users")
+            ),
+            InlineKeyboardButton(
+                "View FAQs", callback_data=view_faqs_callback.new(action="view_faqs")
+            ),
+        )
+        await message.reply(
+            "Welcome back, admin! Please choose an action:", reply_markup=inline_kb
+        )
+    # Provide admin-specific options here (if any)
+    elif is_user_in_database(user_id):
         await message.reply("What questions do you have today?")
         await present_options(message)
     else:
@@ -271,51 +292,37 @@ async def process_start_command(message: types.Message, state: FSMContext):
 
 @dp.message_handler(state=Registration.first_name)
 async def process_first_name(message: types.Message, state: FSMContext):
-    async with state.proxy() as data:
-        data["first_name"] = message.text
-    await Registration.next()
-    await message.reply("Please enter your last name:")
-
-
-@dp.message_handler(state=Registration.last_name)
-async def process_last_name(message: types.Message, state: FSMContext):
-    async with state.proxy() as data:
-        data["last_name"] = message.text
-    await Registration.next()
-    await message.reply("Please enter your middle name:")
-
-
-@dp.message_handler(state=Registration.middle_name)
-async def process_middle_name(message: types.Message, state: FSMContext):
-    async with state.proxy() as data:
-        data["middle_name"] = message.text
-    await Registration.next()
-    await message.reply("Please enter your phone number:")
+    if len(message.text.split(" ")) not in [3, 4]:
+        await message.reply(
+            "Iltimos, to'liq ismingiz, familiyangiz va otaliq ismingizni to'g'ri kiriting! \nMasalan: Anvar Anvarov Anvarovich/Anvar o'g'li"
+        )
+    else:
+        async with state.proxy() as data:
+            data["first_name"] = message.text
+        await Registration.next()
+        await message.reply("Please enter your phone number:")
 
 
 @dp.message_handler(state=Registration.phone_number)
 async def process_phone_number(message: types.Message, state: FSMContext):
-    async with state.proxy() as data:
-        data["phone_number"] = message.text
-    await Registration.next()
-    regions = fetch_regions()
-    inline_kb = InlineKeyboardMarkup(row_width=2)
-    for region in regions:
-        inline_kb.add(
-            InlineKeyboardButton(region, callback_data=region_callback.new(name=region))
+    phone_pattern = r"^\+998\d{15}$"  # Regular expression pattern for the phone number
+    if re.match(phone_pattern, message.text):
+        async with state.proxy() as data:
+            data["phone_number"] = message.text
+        await Registration.next()
+        regions = fetch_regions()
+        inline_kb = InlineKeyboardMarkup(row_width=2)
+        for region in regions:
+            inline_kb.add(
+                InlineKeyboardButton(
+                    region, callback_data=region_callback.new(name=region)
+                )
+            )
+        await message.reply("Turar joyingizni tanlang:", reply_markup=inline_kb)
+    else:
+        await message.reply(
+            "Iltimos telefon raqamingizni quyidagi formatda kiriting: +998123456789(101213 agar chet el nomer bolsa)."
         )
-    await message.reply("Please select your region:", reply_markup=inline_kb)
-
-
-@dp.message_handler(state=Registration.region)
-async def process_region_prompt(message: types.Message):
-    regions = fetch_regions()
-    inline_kb = InlineKeyboardMarkup(row_width=2)
-    for region in regions:
-        inline_kb.add(
-            InlineKeyboardButton(region, callback_data=region_callback.new(name=region))
-        )
-    await message.reply("Please select your region:", reply_markup=inline_kb)
 
 
 @dp.callback_query_handler(region_callback.filter(), state=Registration.region)
@@ -327,25 +334,22 @@ async def process_region_selection(
         data["region"] = region
         data["telegram_id"] = query.from_user.id
         data["telegram_username"] = query.from_user.username
+        print(data)
         add_user_to_database(data)
     await state.finish()
     user_data[query.from_user.id] = {"awaiting_question": True}
-    await query.message.reply("Region selected: " + region)
     await present_options(query.message)
-
-
-@dp.message_handler(lambda message: message.text in ["FAQ", "Categories", "Back"])
-async def process_query_options(message: types.Message):
-    await message.reply(f"You pressed the {message.text} button.")
 
 
 @dp.callback_query_handler(option_callback.filter(name="Categories"))
 async def process_categories_option(query: types.CallbackQuery):
     categories = fetch_categories()
     if not categories:
-        await query.answer("No categories found in the database.")
+        await query.answer(
+            "Hali hech qanday yo'nalishlar yo'q\nSo'rovingizni yozishingiz mumkin."
+        )
         return
-    message_text = "Select a category by its ID:\n"
+    message_text = "Yo'nalishlarni tanlang:\n"
     inline_kb = InlineKeyboardMarkup(row_width=1)
     for index, category_name in enumerate(categories, start=1):
         category_id_button = InlineKeyboardButton(
@@ -366,17 +370,16 @@ async def process_category_selection(query: types.CallbackQuery):
         user_database_id = get_user_database_id(user_telegram_id)
         if user_database_id is not None:
             await query.message.reply(
-                f"You selected category: {selected_category}. Please enter your question."
+                f"Iltimos, {selected_category} yo'nailishi bo'yicha savolingizni yozing."
             )
             user_data[user_telegram_id] = {
                 "category_id": category_index,
                 "awaiting_question": True,
             }
-            print("The cursed function is being called: ", user_data)
         else:
-            await query.answer("User not found in the database.")
+            await query.answer("Foydalanuvchi topilmadi.")
     else:
-        await query.answer("Invalid category selection.")
+        await query.answer("Yaroqsiz yo'nalish tanlandi.")
 
 
 @dp.message_handler(
@@ -392,15 +395,15 @@ async def process_user_question(message: types.Message):
         user_database_id = get_user_database_id(user_telegram_id)
         if user_database_id:
             create_new_question(message.text, False, category_id, user_database_id)
-            await message.reply("Your question has been submitted!")
-            # Send notification to admin
-            admin_message = f"New question submitted:\n{message.text}"
+            message_payload = """E'tiboringiz uchun katta rahmat!\nSo'rovingiz hozirgina adminga jo'natildi, Tez orada so'rovingiz ko'rib chiqiladi"""
+            await message.reply(message_payload)
+            admin_message = f"Assalomu alaykum!\n\nYangi So'rov:\n{message.text}"
             for admin_id in ADMIN_IDS:
                 await bot.send_message(admin_id, admin_message)
         else:
-            await message.reply("User not found in the database.")
+            await message.reply("Foydalanuvchi topilmadi.")
     else:
-        await message.reply("Please select a category first.")
+        await message.reply("Iltimos birinchi yo'nalishlardan birini tanlang.")
 
 
 # --------------------------- ADMIN POSSILBE ACTIONS ---------------------------------
@@ -440,6 +443,16 @@ async def save_admin_response(message: types.Message):
             )
         await message.reply(f"Javob muvaffaqiyatli jonatildi: \n{question_id}.")
         admin_response_state.pop(admin_id)
+
+
+@dp.callback_query_handler(view_questions_callback.filter(action="view_questions"))
+async def admin_view_questions(query: types.CallbackQuery):
+    questions = fetch_unanswered_questions()
+    for q_id, text in questions:
+        inline_kb = InlineKeyboardMarkup()
+        inline_kb.add(InlineKeyboardButton("Answer", callback_data=f"answer_{q_id}"))
+        await query.message.reply(f"Question {q_id}: {text}", reply_markup=inline_kb)
+    await query.answer()
 
 
 if __name__ == "__main__":
