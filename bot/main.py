@@ -281,7 +281,6 @@ async def process_start_command(message: types.Message, state: FSMContext):
         await message.reply(
             "Welcome back, admin! Please choose an action:", reply_markup=inline_kb
         )
-    # Provide admin-specific options here (if any)
     elif is_user_in_database(user_id):
         await message.reply("What questions do you have today?")
         await present_options(message)
