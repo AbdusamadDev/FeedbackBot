@@ -1,2 +1,2 @@
-the question is not being added
-last name is being asked after user question enter
+savollar tabni urniga knopka ochib quyish
+user bilan adminni ajratish

@@ -9,10 +9,13 @@ from aiogram.dispatcher import FSMContext
 from aiogram.utils import executor
 import sqlite3
 
+
+# user_id = 2003049919
+ADMIN_IDS = [2003049919]
+API_TOKEN = "6195275934:AAEngBypgfNw3SwcV9uV_jdatZtMvojF9cs"
 user_data = {}
 option_callback = CallbackData("option", "name")
 faq_callback = CallbackData("faq", "id")
-API_TOKEN = "6195275934:AAEngBypgfNw3SwcV9uV_jdatZtMvojF9cs"
 bot = Bot(token=API_TOKEN)
 storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
@@ -28,8 +31,7 @@ class UserIsAdminFilter(BoundFilter):
         self.user_is_admin = user_is_admin
 
     async def check(self, message: types.Message):
-        admin_ids = [784651348]
-        user_is_admin = message.from_user.id in admin_ids
+        user_is_admin = message.from_user.id in ADMIN_IDS
         return user_is_admin
 
 
@@ -42,6 +44,51 @@ class Registration(StatesGroup):
     middle_name = State()
     phone_number = State()
     region = State()
+
+
+def fetch_question_text(question_id):
+    """
+    Fetch the question text from the database using the question ID.
+    """
+    conn = sqlite3.connect("../db.sqlite3")
+    cursor = conn.cursor()
+    cursor.execute("SELECT text FROM api_question WHERE id = ?", (question_id,))
+    result = cursor.fetchone()
+    conn.close()
+    return result[0] if result else None
+
+
+def get_user_telegram_id_from_question(question_id):
+    """
+    Get the Telegram ID of the user who asked the question.
+    """
+    conn = sqlite3.connect("../db.sqlite3")
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT telegram_id FROM api_user JOIN api_question ON api_user.id = api_question.user_id WHERE api_question.id = ?",
+        (question_id,),
+    )
+    result = cursor.fetchone()
+    conn.close()
+    return result[0] if result else None
+
+
+def save_answer_to_database(question_id, answer, admin_id):
+    """
+    Save the admin's answer to the `api_answer` table.
+    """
+    conn = sqlite3.connect("../db.sqlite3")
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        INSERT INTO api_answer (question_id, text, admin_id)
+        VALUES (?, ?, ?)
+        """,
+        (question_id, answer, admin_id),
+    )
+    print("Somehtisdfasdfsdafdf")
+    conn.commit()
+    conn.close()
 
 
 def create_new_question(text, status, category_id, user_id):
@@ -169,6 +216,11 @@ def waiting_for_admin_response_condition(message: types.Message):
     return admin_response_state.get(user_id, {}).get("awaiting_response", False)
 
 
+######################################################################################
+######################################################################################
+######################################################################################
+######################################################################################
+# ------------------------- USER POSSIBLE ACTIONS ---------------------------
 @dp.callback_query_handler(option_callback.filter(name="FAQ"))
 async def process_faq_option(query: types.CallbackQuery):
     faqs = fetch_faqs()
@@ -341,13 +393,18 @@ async def process_user_question(message: types.Message):
         if user_database_id:
             create_new_question(message.text, False, category_id, user_database_id)
             await message.reply("Your question has been submitted!")
+            # Send notification to admin
+            admin_message = f"New question submitted:\n{message.text}"
+            for admin_id in ADMIN_IDS:
+                await bot.send_message(admin_id, admin_message)
         else:
             await message.reply("User not found in the database.")
     else:
         await message.reply("Please select a category first.")
 
 
-@dp.message_handler(commands=["view_questions"], user_is_admin=True)
+# --------------------------- ADMIN POSSILBE ACTIONS ---------------------------------
+@dp.message_handler(commands=["savollar"], user_is_admin=True)
 async def view_questions(message: types.Message):
     questions = fetch_unanswered_questions()
     for q_id, text in questions:
@@ -359,32 +416,30 @@ async def view_questions(message: types.Message):
 @dp.callback_query_handler(lambda query: query.data.startswith("answer_"))
 async def process_answer(query: types.CallbackQuery):
     question_id = query.data.split("_")[1]
-    await query.message.reply(f"Please type your answer for question {question_id}.")
-
-
-@dp.callback_query_handler(lambda query: query.data.startswith("answer_"))
-async def process_answer(query: types.CallbackQuery):
-    question_id = query.data.split("_")[1]
     admin_response_state[query.from_user.id] = {
         "awaiting_response": True,
         "question_id": question_id,
     }
-    await query.message.reply(f"Please type your answer for question {question_id}.")
+    await query.message.reply(f"Iltimos so'rov uchun javobingizni yozing")
 
 
 @dp.message_handler(lambda message: waiting_for_admin_response_condition(message))
 async def save_admin_response(message: types.Message):
-    question_id = ...
+    admin_id = message.from_user.id
     response = message.text
-    conn = sqlite3.connect("../db.sqlite3")
-    cursor = conn.cursor()
-    cursor.execute(
-        "UPDATE api_question SET answer = ?, status = 1 WHERE id = ?",
-        (response, question_id),
-    )
-    conn.commit()
-    conn.close()
-    await message.reply(f"Answer saved for question {question_id}.")
+    user_data = admin_response_state.get(admin_id)
+    if user_data:
+        question_id = user_data["question_id"]
+        save_answer_to_database(question_id, response, admin_id)
+        user_telegram_id = get_user_telegram_id_from_question(question_id)
+        question = fetch_question_text(question_id)
+        if user_telegram_id:
+            await bot.send_message(
+                user_telegram_id,
+                f"Berilgan savol: {question}\nAdmindan Javob: {response}",
+            )
+        await message.reply(f"Javob muvaffaqiyatli jonatildi: \n{question_id}.")
+        admin_response_state.pop(admin_id)
 
 
 if __name__ == "__main__":
