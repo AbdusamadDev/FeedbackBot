@@ -4,22 +4,27 @@ from aiogram.contrib.middlewares.logging import LoggingMiddleware
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils import executor
 from aiogram.utils.callback_data import CallbackData
-import logging
-
-logging.basicConfig(level=logging.INFO)
+from aiogram.dispatcher.filters.state import State, StatesGroup
+from aiogram.dispatcher import FSMContext
+from aiogram.contrib.fsm_storage.memory import MemoryStorage
 
 user_data = {}
 option_callback = CallbackData("option", "name")
 faq_callback = CallbackData("faq", "id")
-logging.basicConfig(level=logging.INFO)
-
 API_TOKEN = "6195275934:AAEngBypgfNw3SwcV9uV_jdatZtMvojF9cs"
-
 bot = Bot(token=API_TOKEN)
-dp = Dispatcher(bot)
+storage = MemoryStorage()
+dp = Dispatcher(bot, storage=storage)
 dp.middleware.setup(LoggingMiddleware())
-
 region_callback = CallbackData("region", "name")
+
+
+class Registration(StatesGroup):
+    first_name = State()
+    last_name = State()
+    middle_name = State()
+    phone_number = State()
+    region = State()
 
 
 def add_user_to_database(user_data):
@@ -111,7 +116,6 @@ def is_user_in_database(telegram_id):
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM api_user WHERE telegram_id = ?", (telegram_id,))
     user = cursor.fetchone()
-    logging.info("User: " + str(user))
     conn.close()
     return user is not None
 
@@ -132,54 +136,90 @@ async def present_options(message: types.Message):
     await message.reply("Please select an option:", reply_markup=inline_kb)
 
 
-@dp.message_handler(commands=["start"])
-async def process_start_command(message: types.Message):
+# @dp.message_handler(commands=["start"])
+# async def process_start_command(message: types.Message):
+#     if is_user_in_database(message.from_user.id):
+#         await message.reply("What questions do you have today?")
+#         await present_options(message)
+#     else:
+#         user_data[message.from_user.id] = {}
+#         await message.reply("Hi!\nPlease enter your first name:")
+
+
+# @dp.message_handler(
+#     lambda message: "first_name" not in user_data.get(message.from_user.id, {})
+# )
+# async def process_first_name(message: types.Message):
+#     user_data[message.from_user.id]["first_name"] = message.text
+#     await message.reply("Please enter your last name:")
+
+
+# @dp.message_handler(
+#     lambda message: "last_name" not in user_data.get(message.from_user.id, {})
+# )
+# async def process_last_name(message: types.Message):
+#     user_data[message.from_user.id]["last_name"] = message.text
+#     await message.reply("Please enter your middle name:")
+
+
+# @dp.message_handler(
+#     lambda message: "last_name" in user_data.get(message.from_user.id, {})
+#     and "middle_name" not in user_data.get(message.from_user.id, {})
+# )
+# async def process_middle_name(message: types.Message):
+#     user_data[message.from_user.id]["middle_name"] = message.text
+#     await message.reply("Please enter your phone number:")
+
+
+# @dp.message_handler(
+#     lambda message: "phone_number" not in user_data.get(message.from_user.id, {})
+# )
+# async def process_phone_number(message: types.Message):
+#     user_data[message.from_user.id]["phone_number"] = message.text
+#     await process_region(message)  # Call process_region directly
+
+
+@dp.message_handler(commands=["start"], state=None)
+async def process_start_command(message: types.Message, state: FSMContext):
     if is_user_in_database(message.from_user.id):
         await message.reply("What questions do you have today?")
         await present_options(message)
     else:
-        user_data[message.from_user.id] = {}
+        await Registration.first_name.set()
         await message.reply("Hi!\nPlease enter your first name:")
 
 
-@dp.message_handler(
-    lambda message: "first_name" not in user_data.get(message.from_user.id, {})
-)
-async def process_first_name(message: types.Message):
-    user_data[message.from_user.id]["first_name"] = message.text
+@dp.message_handler(state=Registration.first_name)
+async def process_first_name(message: types.Message, state: FSMContext):
+    async with state.proxy() as data:
+        data["first_name"] = message.text
+    await Registration.next()
     await message.reply("Please enter your last name:")
 
 
-@dp.message_handler(
-    lambda message: "last_name" not in user_data.get(message.from_user.id, {})
-)
-async def process_last_name(message: types.Message):
-    user_data[message.from_user.id]["last_name"] = message.text
+@dp.message_handler(state=Registration.last_name)
+async def process_last_name(message: types.Message, state: FSMContext):
+    async with state.proxy() as data:
+        data["last_name"] = message.text
+    await Registration.next()
     await message.reply("Please enter your middle name:")
 
 
-@dp.message_handler(
-    lambda message: "last_name" in user_data.get(message.from_user.id, {})
-    and "middle_name" not in user_data.get(message.from_user.id, {})
-)
-async def process_middle_name(message: types.Message):
-    user_data[message.from_user.id]["middle_name"] = message.text
+# Handler for Middle Name
+@dp.message_handler(state=Registration.middle_name)
+async def process_middle_name(message: types.Message, state: FSMContext):
+    async with state.proxy() as data:
+        data["middle_name"] = message.text
+    await Registration.next()
     await message.reply("Please enter your phone number:")
 
 
-@dp.message_handler(
-    lambda message: "phone_number" not in user_data.get(message.from_user.id, {})
-)
-async def process_phone_number(message: types.Message):
-    user_data[message.from_user.id]["phone_number"] = message.text
-    await process_region(message)  # Call process_region directly
-
-
-@dp.message_handler(
-    lambda message: "phone_number" in user_data.get(message.from_user.id, {})
-    and "region" not in user_data.get(message.from_user.id, {})
-)
-async def process_region(message: types.Message):
+# Handler for Phone Number
+@dp.message_handler(state=Registration.phone_number)
+async def process_phone_number(message: types.Message, state: FSMContext):
+    async with state.proxy() as data:
+        data["phone_number"] = message.text
+    await Registration.next()
     regions = fetch_regions()
     inline_kb = InlineKeyboardMarkup(row_width=2)
     for region in regions:
@@ -189,16 +229,35 @@ async def process_region(message: types.Message):
     await message.reply("Please select your region:", reply_markup=inline_kb)
 
 
-@dp.callback_query_handler(region_callback.filter())
-async def process_region_selection(query: types.CallbackQuery, callback_data: dict):
-    region = callback_data["name"]
-    user_data[query.from_user.id]["region"] = region
-    user_data[query.from_user.id]["telegram_id"] = query.from_user.id
-    user_data[query.from_user.id]["telegram_username"] = query.from_user.username
+@dp.message_handler(state=Registration.region)
+async def process_region_prompt(message: types.Message):
+    regions = fetch_regions()
+    inline_kb = InlineKeyboardMarkup(row_width=2)
+    for region in regions:
+        inline_kb.add(
+            InlineKeyboardButton(region, callback_data=region_callback.new(name=region))
+        )
+    await message.reply("Please select your region:", reply_markup=inline_kb)
 
-    # Save user data to database
-    add_user_to_database(user_data[query.from_user.id])
-    del user_data[query.from_user.id]  # Clear user data after saving
+
+@dp.callback_query_handler(region_callback.filter(), state=Registration.region)
+async def process_region_selection(
+    query: types.CallbackQuery, callback_data: dict, state: FSMContext
+):
+    region = callback_data["name"]
+    async with state.proxy() as data:
+        data["region"] = region
+        data["telegram_id"] = query.from_user.id
+        data["telegram_username"] = query.from_user.username
+
+        # Save user data to database
+        add_user_to_database(data)
+
+    # Clear the user's data from the state
+    await state.finish()
+
+    # Set the user's next action. For example, prompting to select a category or ask a question
+    user_data[query.from_user.id] = {"awaiting_question": True}
 
     await query.message.reply("Region selected: " + region)
     await present_options(query.message)
@@ -216,21 +275,21 @@ async def process_query_options(message: types.Message):
     await message.reply(f"You pressed the {message.text} button.")
 
 
-@dp.message_handler(
-    lambda message: "description" not in user_data.get(message.from_user.id, {})
-)
-async def process_description(message: types.Message):
-    user_data[message.from_user.id]["description"] = message.text
-    data = user_data[message.from_user.id]
-    response = (
-        f"First Name: {data['first_name']}\n"
-        f"Last Name: {data['last_name']}\n"
-        f"Middle Name: {data['middle_name']}\n"
-        f"Phone Number: {data['phone_number']}\n"
-        f"Region: {data['region']}\n"
-        f"Description: {data.get('description', 'Not provided')}"
-    )
-    await message.answer(response)
+# @dp.message_handler(
+#     lambda message: "description" not in user_data.get(message.from_user.id, {})
+# )
+# async def process_description(message: types.Message):
+#     user_data[message.from_user.id]["description"] = message.text
+#     data = user_data[message.from_user.id]
+#     response = (
+#         f"First Name: {data['first_name']}\n"
+#         f"Last Name: {data['last_name']}\n"
+#         f"Middle Name: {data['middle_name']}\n"
+#         f"Phone Number: {data['phone_number']}\n"
+#         f"Region: {data['region']}\n"
+#         f"Description: {data.get('description', 'Not provided')}"
+#     )
+#     await message.answer(response)
 
 
 def fetch_categories():
@@ -312,7 +371,7 @@ async def process_category_selection(query: types.CallbackQuery):
                 "category_id": category_index,
                 "awaiting_question": True,
             }
-
+            print("The cursed function is being called: ", user_data)
         else:
             await query.answer("User not found in the database.")
     else:
@@ -327,22 +386,20 @@ async def process_user_question(message: types.Message):
     user_data_entry = user_data.get(user_telegram_id, {})
 
     if "category_id" in user_data_entry and "awaiting_question" in user_data_entry:
-        # Get the selected category ID and clear the user's state
         category_id = user_data_entry["category_id"]
         user_data_entry.pop("category_id")
         user_data_entry.pop("awaiting_question")
 
-        # Get the user's database ID
         user_database_id = get_user_database_id(user_telegram_id)
-        print(f"\n\n\n\n\n\n\n{message.text}\n{category_id}\n{user_database_id}")
 
-        # Create a new question in the SQLite3 database
-        create_new_question(message.text, False, category_id, user_database_id)
-
-        await message.reply("Your question has been submitted!")
+        if user_database_id:
+            create_new_question(message.text, False, category_id, user_database_id)
+            await message.reply("Your question has been submitted!")
+        else:
+            await message.reply("User not found in the database.")
 
     else:
-        await message.reply("Invalid request or session expired.")
+        await message.reply("Please select a category first.")
 
 
 def get_user_database_id(telegram_id):
