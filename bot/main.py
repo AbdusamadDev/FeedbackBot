@@ -3,6 +3,7 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.contrib.middlewares.logging import LoggingMiddleware
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils import executor
+from aiogram.dispatcher.filters import BoundFilter
 from aiogram.utils.callback_data import CallbackData
 from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.dispatcher import FSMContext
@@ -18,6 +19,20 @@ dp = Dispatcher(bot, storage=storage)
 dp.middleware.setup(LoggingMiddleware())
 region_callback = CallbackData("region", "name")
 
+class UserIsAdminFilter(BoundFilter):
+    key = "user_is_admin"
+
+    def __init__(self, user_is_admin):
+        self.user_is_admin = user_is_admin
+
+    async def check(self, message: types.Message):
+        # Define a list of Telegram IDs for the users who are admins
+        admin_ids = [784651348]  
+        user_is_admin = message.from_user.id in admin_ids
+        # Return True if the user is an admin, otherwise False
+        return user_is_admin
+
+dp.filters_factory.bind(UserIsAdminFilter)
 
 class Registration(StatesGroup):
     first_name = State()
@@ -136,49 +151,6 @@ async def present_options(message: types.Message):
     await message.reply("Please select an option:", reply_markup=inline_kb)
 
 
-# @dp.message_handler(commands=["start"])
-# async def process_start_command(message: types.Message):
-#     if is_user_in_database(message.from_user.id):
-#         await message.reply("What questions do you have today?")
-#         await present_options(message)
-#     else:
-#         user_data[message.from_user.id] = {}
-#         await message.reply("Hi!\nPlease enter your first name:")
-
-
-# @dp.message_handler(
-#     lambda message: "first_name" not in user_data.get(message.from_user.id, {})
-# )
-# async def process_first_name(message: types.Message):
-#     user_data[message.from_user.id]["first_name"] = message.text
-#     await message.reply("Please enter your last name:")
-
-
-# @dp.message_handler(
-#     lambda message: "last_name" not in user_data.get(message.from_user.id, {})
-# )
-# async def process_last_name(message: types.Message):
-#     user_data[message.from_user.id]["last_name"] = message.text
-#     await message.reply("Please enter your middle name:")
-
-
-# @dp.message_handler(
-#     lambda message: "last_name" in user_data.get(message.from_user.id, {})
-#     and "middle_name" not in user_data.get(message.from_user.id, {})
-# )
-# async def process_middle_name(message: types.Message):
-#     user_data[message.from_user.id]["middle_name"] = message.text
-#     await message.reply("Please enter your phone number:")
-
-
-# @dp.message_handler(
-#     lambda message: "phone_number" not in user_data.get(message.from_user.id, {})
-# )
-# async def process_phone_number(message: types.Message):
-#     user_data[message.from_user.id]["phone_number"] = message.text
-#     await process_region(message)  # Call process_region directly
-
-
 @dp.message_handler(commands=["start"], state=None)
 async def process_start_command(message: types.Message, state: FSMContext):
     if is_user_in_database(message.from_user.id):
@@ -263,33 +235,9 @@ async def process_region_selection(
     await present_options(query.message)
 
 
-# @dp.callback_query_handler(option_callback.filter())
-# async def process_option_selection(query: types.CallbackQuery, callback_data: dict):
-#     option = callback_data["name"]
-#     await query.message.reply(f"You selected {option}.")
-#     await query.answer()
-
-
 @dp.message_handler(lambda message: message.text in ["FAQ", "Categories", "Back"])
 async def process_query_options(message: types.Message):
     await message.reply(f"You pressed the {message.text} button.")
-
-
-# @dp.message_handler(
-#     lambda message: "description" not in user_data.get(message.from_user.id, {})
-# )
-# async def process_description(message: types.Message):
-#     user_data[message.from_user.id]["description"] = message.text
-#     data = user_data[message.from_user.id]
-#     response = (
-#         f"First Name: {data['first_name']}\n"
-#         f"Last Name: {data['last_name']}\n"
-#         f"Middle Name: {data['middle_name']}\n"
-#         f"Phone Number: {data['phone_number']}\n"
-#         f"Region: {data['region']}\n"
-#         f"Description: {data.get('description', 'Not provided')}"
-#     )
-#     await message.answer(response)
 
 
 def fetch_categories():
@@ -419,6 +367,79 @@ def get_user_database_id(telegram_id):
         return result[0]  # Assuming 'id' is the database ID field
     else:
         return None
+
+
+# Step 1: Function to fetch unanswered questions
+def fetch_unanswered_questions():
+    conn = sqlite3.connect("../db.sqlite3")
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT id, text FROM api_question WHERE status = 0"
+    )  # Assuming 0 means unanswered
+    questions = cursor.fetchall()
+    conn.close()
+    return questions
+
+
+# Step 2: Admin command to view questions
+@dp.message_handler(
+    commands=["view_questions"], user_is_admin=True
+)  # Ensure this is accessible only by admins
+async def view_questions(message: types.Message):
+    questions = fetch_unanswered_questions()
+    for q_id, text in questions:
+        inline_kb = InlineKeyboardMarkup()
+        inline_kb.add(InlineKeyboardButton("Answer", callback_data=f"answer_{q_id}"))
+        await message.reply(f"Question {q_id}: {text}", reply_markup=inline_kb)
+
+
+# Step 3: Admin response handler
+@dp.callback_query_handler(lambda query: query.data.startswith("answer_"))
+async def process_answer(query: types.CallbackQuery):
+    question_id = query.data.split("_")[1]
+    await query.message.reply(f"Please type your answer for question {question_id}.")
+    # Store the question ID in user_data or state for reference in the next step
+
+
+# Global state dictionary
+admin_response_state = {}
+
+
+def waiting_for_admin_response_condition(message: types.Message):
+    user_id = message.from_user.id
+    # Check if the bot is waiting for a response from this specific admin
+    return admin_response_state.get(user_id, {}).get("awaiting_response", False)
+
+
+@dp.callback_query_handler(lambda query: query.data.startswith("answer_"))
+async def process_answer(query: types.CallbackQuery):
+    question_id = query.data.split("_")[1]
+    admin_response_state[query.from_user.id] = {
+        "awaiting_response": True,
+        "question_id": question_id,
+    }
+    await query.message.reply(f"Please type your answer for question {question_id}.")
+
+
+
+# Step 4: Update the database with admin's response
+@dp.message_handler(
+    lambda message: waiting_for_admin_response_condition(message)
+)  # Implement this condition
+async def save_admin_response(message: types.Message):
+    question_id = ...  # Retrieve the question ID stored earlier
+    response = message.text
+    # Update the database to set the question as answered and store the response
+    conn = sqlite3.connect("../db.sqlite3")
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE api_question SET answer = ?, status = 1 WHERE id = ?",
+        (response, question_id),
+    )
+    conn.commit()
+    conn.close()
+    await message.reply(f"Answer saved for question {question_id}.")
+
 
 
 if __name__ == "__main__":
