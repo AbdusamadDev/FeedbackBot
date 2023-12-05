@@ -14,6 +14,7 @@ import sqlite3
 ADMIN_IDS = [2003049919]
 API_TOKEN = "6195275934:AAEngBypgfNw3SwcV9uV_jdatZtMvojF9cs"
 option_callback = CallbackData("option", "name")
+answer_callback = CallbackData("answer", "id")
 faq_callback = CallbackData("faq", "id")
 view_questions_callback = CallbackData("admin_action", "action")
 view_users_callback = CallbackData("admin_action", "action")
@@ -255,7 +256,7 @@ async def present_options(message: types.Message):
     await message.reply("Please select an option:", reply_markup=inline_kb)
 
 
-@dp.message_handler(commands=["start"], state=None, user_is_admin=False)
+@dp.message_handler(commands=["start"], state=None)
 async def process_start_command(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
     if user_id in ADMIN_IDS:
@@ -307,7 +308,7 @@ async def process_phone_number(message: types.Message, state: FSMContext):
             data["phone_number"] = message.text
         await Registration.next()
         regions = fetch_regions()
-        inline_kb = InlineKeyboardMarkup(row_width=2)
+        inline_kb = InlineKeyboardMarkup(row_width=4)
         for region in regions:
             inline_kb.add(
                 InlineKeyboardButton(
@@ -346,7 +347,7 @@ async def process_categories_option(query: types.CallbackQuery):
         )
         return
     message_text = "Yo'nalishlarni tanlang:\n"
-    inline_kb = InlineKeyboardMarkup(row_width=1)
+    inline_kb = InlineKeyboardMarkup(row_width=4)
     for index, category_name in enumerate(categories, start=1):
         category_id_button = InlineKeyboardButton(
             f"{index}. {category_name}", callback_data=f"category_{index}"
@@ -406,10 +407,12 @@ async def process_user_question(message: types.Message):
 @dp.message_handler(commands=["savollar"], user_is_admin=True)
 async def view_questions(message: types.Message):
     questions = fetch_unanswered_questions()
+    inline_kb = InlineKeyboardMarkup(row_width=6)
     for q_id, text in questions:
-        inline_kb = InlineKeyboardMarkup()
-        inline_kb.add(InlineKeyboardButton("Answer", callback_data=f"answer_{q_id}"))
-        await message.reply(f"Question {q_id}: {text}", reply_markup=inline_kb)
+        button_text = f"{q_id}"
+        inline_kb.add(InlineKeyboardButton(button_text, callback_data=answer_callback.new(id=q_id)))
+    await message.reply("Select a question to answer:", reply_markup=inline_kb)
+
 
 
 @dp.callback_query_handler(lambda query: query.data.startswith("answer_"))
@@ -420,6 +423,16 @@ async def process_answer(query: types.CallbackQuery):
         "question_id": question_id,
     }
     await query.message.reply(f"Iltimos so'rov uchun javobingizni yozing")
+
+
+@dp.callback_query_handler(answer_callback.filter())
+async def prompt_for_answer(query: types.CallbackQuery, callback_data: dict):
+    question_id = callback_data["id"]
+    admin_response_state[query.from_user.id] = {
+        "awaiting_response": True,
+        "question_id": question_id,
+    }
+    await query.message.reply(f"Enter your answer for question ID {question_id}:")
 
 
 @dp.message_handler(lambda message: waiting_for_admin_response_condition(message))
@@ -440,7 +453,7 @@ async def save_admin_response(message: types.Message):
         conn = sqlite3.connect("../db.sqlite3")
         cursor = conn.cursor()
         cursor.execute(
-            "UPDATE api_question SET status=1 WHERE id=?", (question_id)
+            "UPDATE api_question SET status=1 WHERE id=?", (question_id,)
         )
         conn.commit()
         conn.close()
@@ -451,11 +464,13 @@ async def save_admin_response(message: types.Message):
 @dp.callback_query_handler(view_questions_callback.filter(action="view_questions"))
 async def admin_view_questions(query: types.CallbackQuery):
     questions = fetch_unanswered_questions()
+    inline_kb = InlineKeyboardMarkup()
     for q_id, text in questions:
-        inline_kb = InlineKeyboardMarkup()
-        inline_kb.add(InlineKeyboardButton("Answer", callback_data=f"answer_{q_id}"))
-        await query.message.reply(f"Question {q_id}: {text}", reply_markup=inline_kb)
+        button_text = f"{q_id}"
+        inline_kb.add(InlineKeyboardButton(button_text, callback_data=answer_callback.new(id=q_id)))
+    await query.message.reply("Select a question to answer:", reply_markup=inline_kb)
     await query.answer()
+
 
 
 if __name__ == "__main__":
