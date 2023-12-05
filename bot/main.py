@@ -87,7 +87,6 @@ def save_answer_to_database(question_id, answer, admin_id):
         """,
         (question_id, answer, admin_id),
     )
-    print("Somehtisdfasdfsdafdf")
     conn.commit()
     conn.close()
 
@@ -256,7 +255,7 @@ async def present_options(message: types.Message):
     await message.reply("Please select an option:", reply_markup=inline_kb)
 
 
-@dp.message_handler(commands=["start"], state=None)
+@dp.message_handler(commands=["start"], state=None, user_is_admin=False)
 async def process_start_command(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
     if user_id in ADMIN_IDS:
@@ -438,13 +437,13 @@ async def save_admin_response(message: types.Message):
                 user_telegram_id,
                 f"Berilgan savol: {question}\nAdmindan Javob: {response}",
             )
-            conn = sqlite3.connect("../db.sqlite3")
-            cursor = conn.cursor()
-            cursor.execute(
-                "UPDATE api_question SET status=1 WHERE id=%s", (question_id)
-            )
-            conn.commit()
-            conn.close()
+        conn = sqlite3.connect("../db.sqlite3")
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE api_question SET status=1 WHERE id=?", (question_id)
+        )
+        conn.commit()
+        conn.close()
         await message.reply(f"Javob muvaffaqiyatli jonatildi: \n{question_id}.")
         admin_response_state.pop(admin_id)
 
