@@ -407,12 +407,30 @@ async def process_user_question(message: types.Message):
 @dp.message_handler(commands=["savollar"], user_is_admin=True)
 async def view_questions(message: types.Message):
     questions = fetch_unanswered_questions()
-    inline_kb = InlineKeyboardMarkup(row_width=6)
+    inline_kb = InlineKeyboardMarkup()
+
+    # New code to create the question list string
+    question_list = "\n".join([f"{q_id}. {text}" for q_id, text in questions])
+    question_list += "\n_______________________________________\n"
+
+    temp_row = []
     for q_id, text in questions:
         button_text = f"{q_id}"
-        inline_kb.add(InlineKeyboardButton(button_text, callback_data=answer_callback.new(id=q_id)))
-    await message.reply("Select a question to answer:", reply_markup=inline_kb)
+        temp_row.append(
+            InlineKeyboardButton(
+                button_text, callback_data=answer_callback.new(id=q_id)
+            )
+        )
 
+        if len(temp_row) == 5:  # Once we have 6 buttons, add the row to the keyboard
+            inline_kb.row(*temp_row)
+            temp_row = []  # Reset the temp row
+
+    if temp_row:  # Add any remaining buttons as a row
+        inline_kb.row(*temp_row)
+
+    # Send the question list along with the buttons
+    await message.reply(question_list, reply_markup=inline_kb)
 
 
 @dp.callback_query_handler(lambda query: query.data.startswith("answer_"))
@@ -452,9 +470,7 @@ async def save_admin_response(message: types.Message):
             )
         conn = sqlite3.connect("../db.sqlite3")
         cursor = conn.cursor()
-        cursor.execute(
-            "UPDATE api_question SET status=1 WHERE id=?", (question_id,)
-        )
+        cursor.execute("UPDATE api_question SET status=1 WHERE id=?", (question_id,))
         conn.commit()
         conn.close()
         await message.reply(f"Javob muvaffaqiyatli jonatildi: \n{question_id}.")
@@ -465,12 +481,30 @@ async def save_admin_response(message: types.Message):
 async def admin_view_questions(query: types.CallbackQuery):
     questions = fetch_unanswered_questions()
     inline_kb = InlineKeyboardMarkup()
+
+    # New code to create the question list string
+    question_list = "\n".join([f"{q_id}. {text}" for q_id, text in questions])
+    question_list += "\n_______________________________________\n"
+
+    temp_row = []
     for q_id, text in questions:
         button_text = f"{q_id}"
-        inline_kb.add(InlineKeyboardButton(button_text, callback_data=answer_callback.new(id=q_id)))
-    await query.message.reply("Select a question to answer:", reply_markup=inline_kb)
-    await query.answer()
+        temp_row.append(
+            InlineKeyboardButton(
+                button_text, callback_data=answer_callback.new(id=q_id)
+            )
+        )
 
+        if len(temp_row) == 5:
+            inline_kb.row(*temp_row)
+            temp_row = []
+
+    if temp_row:
+        inline_kb.row(*temp_row)
+
+    # Send the question list along with the buttons
+    await query.message.reply(question_list, reply_markup=inline_kb)
+    await query.answer()
 
 
 if __name__ == "__main__":
