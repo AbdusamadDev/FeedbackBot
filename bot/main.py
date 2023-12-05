@@ -8,24 +8,23 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.dispatcher import FSMContext
 from aiogram.utils import executor
 import sqlite3
-import re
 
 
 # user_id = 2003049919
 ADMIN_IDS = [2003049919]
 API_TOKEN = "6195275934:AAEngBypgfNw3SwcV9uV_jdatZtMvojF9cs"
-user_data = {}
 option_callback = CallbackData("option", "name")
 faq_callback = CallbackData("faq", "id")
 view_questions_callback = CallbackData("admin_action", "action")
 view_users_callback = CallbackData("admin_action", "action")
 view_faqs_callback = CallbackData("admin_action", "action")
-bot = Bot(token=API_TOKEN)
+region_callback = CallbackData("region", "name")
 storage = MemoryStorage()
+bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot, storage=storage)
 dp.middleware.setup(LoggingMiddleware())
-region_callback = CallbackData("region", "name")
 admin_response_state = {}
+user_data = {}
 
 
 class UserIsAdminFilter(BoundFilter):
@@ -218,10 +217,6 @@ def waiting_for_admin_response_condition(message: types.Message):
     return admin_response_state.get(user_id, {}).get("awaiting_response", False)
 
 
-######################################################################################
-######################################################################################
-######################################################################################
-######################################################################################
 # ------------------------- USER POSSIBLE ACTIONS ---------------------------
 @dp.callback_query_handler(option_callback.filter(name="FAQ"))
 async def process_faq_option(query: types.CallbackQuery):
@@ -304,8 +299,11 @@ async def process_first_name(message: types.Message, state: FSMContext):
 
 @dp.message_handler(state=Registration.phone_number)
 async def process_phone_number(message: types.Message, state: FSMContext):
-    phone_pattern = r"^\+998\d{15}$"  # Regular expression pattern for the phone number
-    if re.match(phone_pattern, message.text):
+    if (
+        message.text.startswith("+998")
+        and len(message.text.split(" ")) == 1
+        and message.text[1:].isdigit()
+    ):
         async with state.proxy() as data:
             data["phone_number"] = message.text
         await Registration.next()
@@ -440,6 +438,13 @@ async def save_admin_response(message: types.Message):
                 user_telegram_id,
                 f"Berilgan savol: {question}\nAdmindan Javob: {response}",
             )
+            conn = sqlite3.connect("../db.sqlite3")
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE api_question SET status=1 WHERE id=%s", (question_id)
+            )
+            conn.commit()
+            conn.close()
         await message.reply(f"Javob muvaffaqiyatli jonatildi: \n{question_id}.")
         admin_response_state.pop(admin_id)
 

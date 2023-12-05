@@ -1,4 +1,6 @@
-savollar tabni urniga knopka ochib quyish
 user bilan adminni ajratish
 savolga javob berilgandan kiyin statusni 1 qilib quyish
 englishni uzbekcha qilish
+tab vkm botdek chiqishi kerak
+filter qushish
+filter hudud, date, category, status

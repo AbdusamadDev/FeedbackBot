@@ -1,12 +1,7 @@
 from django.utils.html import format_html
 from django.contrib import admin
 
-from api.models import (
-    FAQ,
-    Category,
-    User,
-    Regions,
-)
+from api.models import FAQ, Category, User, Regions, Question, Answer
 
 
 class UserAdmin(admin.ModelAdmin):
@@ -67,3 +62,5 @@ admin.site.register(Category, CategoryAdmin)
 admin.site.register(User, UserAdmin)
 admin.site.register(FAQ, FAQAdmin)
 admin.site.register(Regions)
+admin.site.register(Answer)
+admin.site.register(Question)
