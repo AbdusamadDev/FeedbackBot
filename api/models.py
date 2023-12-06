@@ -3,10 +3,21 @@ from django.core.validators import RegexValidator
 
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+import sqlite3
+
+
+def get_regions():
+    conn = sqlite3.connect("./db.sqlite3")
+    cursor = conn.cursor()
+    query = cursor.execute("""SELECT name FROM api_regions""")
+    buildup = ((r[0], r[0]) for r in query.fetchall())
+    print(buildup)
+    return buildup
 
 
 class CustomAdmin(AbstractUser):
     telegram_id = models.IntegerField(null=True, unique=True)
+    region = models.CharField(max_length=200, choices=get_regions(), default="nanna")
 
 
 class Category(models.Model):
@@ -17,14 +28,18 @@ class Category(models.Model):
     def __str__(self) -> str:
         return self.title
 
+    class Meta:
+        verbose_name_plural = "Yo'nalishlar "
+        verbose_name = "yo'nalish "
+
 
 class User(models.Model):
     fullname = models.CharField(max_length=100)
     phone_regex = RegexValidator(
         regex=r"^\+\d{8,15}$",
         message="""
-            Phone number must be entered in the format: '+9981234567'. 
-            Up to 15 digits allowed.
+            Telefon raqam quyidagi formatda kiritish kerak: '+9981234567'. 
+            15 ta raqamgacha ruxsat berilgan.
         """,
     )
 
@@ -34,8 +49,11 @@ class User(models.Model):
     telegram_username = models.CharField(max_length=60, default="asda")
 
     def __str__(self) -> str:
-        return f"User: {self.fullname} Phone number: {self.phone_number}"
+        return f"Xodim: {self.fullname} Telefon raqam: {self.phone_number}"
 
+    class Meta:
+        verbose_name_plural = "Xodimlar "
+        verbose_name = "xodim "
 
 class Question(models.Model):
     CHOICES = ((True, "Yes"), (False, "No"))
@@ -53,6 +71,10 @@ class Question(models.Model):
     is_answered.boolean = True
     is_answered.short_description = "Answered?"
 
+    class Meta:
+        verbose_name_plural = "Savollar "
+        verbose_name = "savol "
+
 
 class FAQ(models.Model):
     question = models.CharField(max_length=200)
@@ -61,6 +83,10 @@ class FAQ(models.Model):
 
     def __str__(self) -> str:
         return f"{self.question}\n\n{self.answer}"
+
+    class Meta:
+        verbose_name_plural = "Ko'p beriladigan savollar "
+        verbose_name = "faq "
 
 
 class Answer(models.Model):
@@ -71,10 +97,18 @@ class Answer(models.Model):
     def __str__(self) -> str:
         return self.text
 
+    class Meta:
+        verbose_name_plural = "Javoblar "
+        verbose_name = "Javob "
+
 
 class Regions(models.Model):
     name = models.CharField(max_length=120)
     admin = models.ForeignKey(to=CustomAdmin, on_delete=models.CASCADE)
 
     def __str__(self):
-        return f"Region: {self.name} by Admin: {self.admin}"
+        return f"Hudud: {self.name} Admin: {self.admin}"
+
+    class Meta:
+        verbose_name_plural = "Hududlar "
+        verbose_name = "hudud "

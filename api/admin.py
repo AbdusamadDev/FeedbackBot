@@ -1,14 +1,22 @@
 from django.utils.html import format_html
 from django.contrib import admin
 
-from api.models import FAQ, Category, User, Regions, Question, Answer
+from api.models import (
+    FAQ,
+    Category,
+    User,
+    Regions,
+    Question,
+    Answer,
+    CustomAdmin as AdminUser,
+)
 
 
-class UserAdmin(admin.ModelAdmin):
-    search_fields = ("fullname", "region")
-    ordering = ("fullname",)
-    list_display = [field.name for field in User._meta.fields]
-    list_filter = [field.name for field in User._meta.fields]
+class AdminUserAdmin(admin.ModelAdmin):
+    search_fields = ("username", "region", "telegram_id")
+    ordering = ("username",)
+    list_display = [field.name for field in AdminUser._meta.fields]
+    list_filter = [field.name for field in AdminUser._meta.fields]
 
     def formatted_phone(self, obj):
         return f"{obj.phone_number[:4]}-{obj.phone_number[4:]}"
@@ -81,7 +89,7 @@ class AnswerAdmin(admin.ModelAdmin):
 
 
 admin.site.register(Category, CategoryAdmin)
-admin.site.register(User, UserAdmin)
+admin.site.register(AdminUser, AdminUserAdmin)
 admin.site.register(FAQ, FAQAdmin)
 admin.site.register(Regions)
 admin.site.register(Answer, AnswerAdmin)
