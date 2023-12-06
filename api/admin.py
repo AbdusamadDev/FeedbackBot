@@ -5,10 +5,10 @@ from api.models import FAQ, Category, User, Regions, Question, Answer
 
 
 class UserAdmin(admin.ModelAdmin):
-    list_display = ("fullname", "phone_number", "region", "formatted_phone")
     search_fields = ("fullname", "region")
-    list_filter = ("region",)
     ordering = ("fullname",)
+    list_display = [field.name for field in User._meta.fields]
+    list_filter = [field.name for field in User._meta.fields]
 
     def formatted_phone(self, obj):
         return f"{obj.phone_number[:4]}-{obj.phone_number[4:]}"
@@ -17,8 +17,9 @@ class UserAdmin(admin.ModelAdmin):
 
 
 class CategoryAdmin(admin.ModelAdmin):
-    list_display = ("detailed_description",)
     exclude = ("admin",)  # Exclude the admin field from the form
+    list_display = [field.name for field in Category._meta.fields]
+    list_filter = [field.name for field in Category._meta.fields]
 
     def save_model(self, request, obj, form, change):
         if not obj.pk:  # Check if this is a new object being created
@@ -38,7 +39,8 @@ class CategoryAdmin(admin.ModelAdmin):
 
 
 class FAQAdmin(admin.ModelAdmin):
-    list_display = ("detailed_description",)
+    list_display = [field.name for field in FAQ._meta.fields]
+    list_filter = [field.name for field in FAQ._meta.fields]
     exclude = ("admin",)  # Exclude the admin field from the form
 
     def save_model(self, request, obj, form, change):
@@ -58,9 +60,29 @@ class FAQAdmin(admin.ModelAdmin):
     detailed_description.short_description = "FAQ Details"
 
 
+class QuestionAdmin(admin.ModelAdmin):
+    list_display = (
+        "text",
+        "status",
+        "category",
+        "user",
+    )  # Fields to display in the admin list view
+    list_filter = (
+        "status",
+        "category",
+        "user",
+    )  # Fields to filter by in the admin list view
+    search_fields = ("text",)
+
+
+class AnswerAdmin(admin.ModelAdmin):
+    list_display = [field.name for field in Answer._meta.fields]
+    list_filter = [field.name for field in Answer._meta.fields]
+
+
 admin.site.register(Category, CategoryAdmin)
 admin.site.register(User, UserAdmin)
 admin.site.register(FAQ, FAQAdmin)
 admin.site.register(Regions)
-admin.site.register(Answer)
-admin.site.register(Question)
+admin.site.register(Answer, AnswerAdmin)
+admin.site.register(Question, QuestionAdmin)
