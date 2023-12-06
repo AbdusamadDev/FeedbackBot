@@ -225,7 +225,7 @@ async def process_faq_option(query: types.CallbackQuery):
         inline_kb = InlineKeyboardMarkup()
         inline_kb.add(
             InlineKeyboardButton(
-                "See Answer", callback_data=faq_callback.new(id=faq_id)
+                "✅ Javobni ko'rish", callback_data=faq_callback.new(id=faq_id)
             )
         )
         await query.message.reply(question, reply_markup=inline_kb)
@@ -243,17 +243,21 @@ async def process_faq_answer(query: types.CallbackQuery, callback_data: dict):
 async def present_options(message: types.Message):
     inline_kb = InlineKeyboardMarkup(row_width=3)
     inline_kb.add(
-        InlineKeyboardButton("FAQ", callback_data=option_callback.new(name="FAQ"))
-    )
-    inline_kb.add(
         InlineKeyboardButton(
-            "Categories", callback_data=option_callback.new(name="Categories")
+            "ℹ️ FAQ - Ko'p beriladigan savollar",
+            callback_data=option_callback.new(name="FAQ"),
         )
     )
     inline_kb.add(
-        InlineKeyboardButton("Back", callback_data=option_callback.new(name="Back"))
+        InlineKeyboardButton(
+            "ℹ️ Yo'nalishlarni korish",
+            callback_data=option_callback.new(name="Categories"),
+        )
     )
-    await message.reply("Please select an option:", reply_markup=inline_kb)
+    await message.reply(
+        "✅ Ro'yxatdan o'tdingiz, iltimos quyidalardan birini tanglang:",
+        reply_markup=inline_kb,
+    )
 
 
 @dp.message_handler(commands=["start"], state=None)
@@ -263,38 +267,40 @@ async def process_start_command(message: types.Message, state: FSMContext):
         inline_kb = InlineKeyboardMarkup(row_width=1)
         inline_kb.add(
             InlineKeyboardButton(
-                "View Questions",
+                "Murojaatlarni ko'rish",
                 callback_data=view_questions_callback.new(action="view_questions"),
             ),
             InlineKeyboardButton(
-                "View Users", callback_data=view_users_callback.new(action="view_users")
+                "Murojaatchilarni ko'rish",
+                callback_data=view_users_callback.new(action="view_users"),
             ),
             InlineKeyboardButton(
-                "View FAQs", callback_data=view_faqs_callback.new(action="view_faqs")
+                "FAQ ni ko'rish",
+                callback_data=view_faqs_callback.new(action="view_faqs"),
             ),
         )
         await message.reply(
-            "Welcome back, admin! Please choose an action:", reply_markup=inline_kb
+            "Assalomu alaykum admin, hush kelibsiz!", reply_markup=inline_kb
         )
     elif is_user_in_database(user_id):
-        await message.reply("What questions do you have today?")
+        await message.reply("Assalomu alaykum, bugun qanday murojaatlaringiz bor?")
         await present_options(message)
     else:
         await Registration.first_name.set()
-        await message.reply("Hi!\nPlease enter your first name:")
+        await message.reply("Hi!\nIsmingizni kiriting:")
 
 
 @dp.message_handler(state=Registration.first_name)
 async def process_first_name(message: types.Message, state: FSMContext):
     if len(message.text.split(" ")) not in [3, 4]:
         await message.reply(
-            "Iltimos, to'liq ismingiz, familiyangiz va otaliq ismingizni to'g'ri kiriting! \nMasalan: Anvar Anvarov Anvarovich/Anvar o'g'li"
+            "🚫 Iltimos, to'liq ismingiz, familiyangiz va otaliq ismingizni to'g'ri kiriting! \nMasalan: Anvar Anvarov Anvarovich/Anvar o'g'li"
         )
     else:
         async with state.proxy() as data:
             data["first_name"] = message.text
         await Registration.next()
-        await message.reply("Please enter your phone number:")
+        await message.reply("Telefon raqamingizni kiriting:\nMasalan +998991234567")
 
 
 @dp.message_handler(state=Registration.phone_number)
@@ -318,7 +324,7 @@ async def process_phone_number(message: types.Message, state: FSMContext):
         await message.reply("Turar joyingizni tanlang:", reply_markup=inline_kb)
     else:
         await message.reply(
-            "Iltimos telefon raqamingizni quyidagi formatda kiriting: +998123456789(101213 agar chet el nomer bolsa)."
+            "🚫 Iltimos telefon raqamingizni quyidagi formatda kiriting: +998123456789(101213 agar chet el nomer bolsa)."
         )
 
 
@@ -343,7 +349,7 @@ async def process_categories_option(query: types.CallbackQuery):
     categories = fetch_categories()
     if not categories:
         await query.answer(
-            "Hali hech qanday yo'nalishlar yo'q\nSo'rovingizni yozishingiz mumkin."
+            "🚫 Hali hech qanday yo'nalishlar yo'q\nSo'rovingizni yozishingiz mumkin."
         )
         return
     message_text = "Yo'nalishlarni tanlang:\n"
@@ -374,9 +380,9 @@ async def process_category_selection(query: types.CallbackQuery):
                 "awaiting_question": True,
             }
         else:
-            await query.answer("Foydalanuvchi topilmadi.")
+            await query.answer("🚫 Foydalanuvchi topilmadi.")
     else:
-        await query.answer("Yaroqsiz yo'nalish tanlandi.")
+        await query.answer("🚫 Yaroqsiz yo'nalish tanlandi.")
 
 
 @dp.message_handler(
@@ -392,15 +398,17 @@ async def process_user_question(message: types.Message):
         user_database_id = get_user_database_id(user_telegram_id)
         if user_database_id:
             create_new_question(message.text, False, category_id, user_database_id)
-            message_payload = """E'tiboringiz uchun katta rahmat!\nSo'rovingiz hozirgina adminga jo'natildi, Tez orada so'rovingiz ko'rib chiqiladi"""
+            message_payload = """🥳🥳🥳\nE'tiboringiz uchun katta rahmat!\nSo'rovingiz hozirgina adminga jo'natildi, Tez orada so'rovingiz ko'rib chiqiladi"""
             await message.reply(message_payload)
-            admin_message = f"Assalomu alaykum!\n\nYangi So'rov:\n{message.text}"
+            admin_message = (
+                f"ℹ️ℹ️ℹ️\nAssalomu alaykum!\n\nYangi So'rov:\n{message.text}"
+            )
             for admin_id in ADMIN_IDS:
                 await bot.send_message(admin_id, admin_message)
         else:
-            await message.reply("Foydalanuvchi topilmadi.")
+            await message.reply("🚫 Foydalanuvchi topilmadi.")
     else:
-        await message.reply("Iltimos birinchi yo'nalishlardan birini tanlang.")
+        await message.reply("🚫 Iltimos birinchi yo'nalishlardan birini tanlang.")
 
 
 # --------------------------- ADMIN POSSILBE ACTIONS ---------------------------------
@@ -434,7 +442,7 @@ async def display_page(message: types.Message, pages, page):
         inline_kb = InlineKeyboardMarkup(row_width=5)
 
         # Message text to include question text
-        message_text = "Choose a question:\n\n" + "\n".join(
+        message_text = "Murojaatlardan birini tanlang:\n\n" + "\n".join(
             [f"{q_id}. {text}" for q_id, text in questions_page]
         )
 
@@ -463,7 +471,7 @@ async def display_page(message: types.Message, pages, page):
             )
         await message.answer(message_text, reply_markup=inline_kb)
     else:
-        await message.answer("No questions available.")
+        await message.answer("Hech qanday murojaatlar yo'q.")
 
 
 # Callback handler for page navigation
@@ -486,7 +494,7 @@ async def process_answer(query: types.CallbackQuery):
         "awaiting_response": True,
         "question_id": question_id,
     }
-    await query.message.reply(f"Iltimos so'rov uchun javobingizni yozing")
+    await query.message.reply(f"ℹ️ Iltimos so'rov uchun javobingizni yozing")
 
 
 @dp.callback_query_handler(answer_callback.filter())
@@ -496,7 +504,6 @@ async def prompt_for_answer(query: types.CallbackQuery, callback_data: dict):
         "awaiting_response": True,
         "question_id": question_id,
     }
-    await query.message.reply(f"Enter your answer for question ID {question_id}:")
 
 
 @dp.message_handler(lambda message: waiting_for_admin_response_condition(message))
@@ -519,7 +526,7 @@ async def save_admin_response(message: types.Message):
         cursor.execute("UPDATE api_question SET status=1 WHERE id=?", (question_id,))
         conn.commit()
         conn.close()
-        await message.reply(f"Javob muvaffaqiyatli jonatildi: \n{question_id}.")
+        await message.reply(f"🥳🥳🥳\nJavob muvaffaqiyatli jonatildi: \n{question_id}.")
         admin_response_state.pop(admin_id)
 
 
