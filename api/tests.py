@@ -1,13 +1,10 @@
-import requests
+from django.contrib.auth.hashers import make_password
 
-for i in range(100):
-    request = requests.post(
-        url="http://localhost:8000/api/questions/",
-        json={
-            "text": f"question {i}",
-            "status": False,
-            "category": {1, 2}.pop(),
-            "user": {15, 16, 22, 23}.pop(),
-        },
-    )
-    print(request.json())
+import os
+import django
+
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
+django.setup()
+
+hashed_password = make_password("2005")
+print(hashed_password)

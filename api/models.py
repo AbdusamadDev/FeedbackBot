@@ -1,11 +1,17 @@
 from django.db import models
-from django.contrib.auth.models import User as Admin
 from django.core.validators import RegexValidator
+
+from django.contrib.auth.models import AbstractUser
+from django.db import models
+
+
+class CustomAdmin(AbstractUser):
+    telegram_id = models.IntegerField(null=True, unique=True)
 
 
 class Category(models.Model):
     title = models.CharField(max_length=150)
-    admin = models.ForeignKey(to=Admin, on_delete=models.CASCADE)  # Super Admin
+    admin = models.ForeignKey(to=CustomAdmin, on_delete=models.CASCADE)  # Super Admin
     date_created = models.DateTimeField(auto_now_add=True)
 
     def __str__(self) -> str:
@@ -51,7 +57,7 @@ class Question(models.Model):
 class FAQ(models.Model):
     question = models.CharField(max_length=200)
     answer = models.TextField(max_length=700)
-    admin = models.ForeignKey(to=Admin, on_delete=models.CASCADE)  # Super Admin
+    admin = models.ForeignKey(to=CustomAdmin, on_delete=models.CASCADE)  # Super Admin
 
     def __str__(self) -> str:
         return f"{self.question}\n\n{self.answer}"
@@ -60,7 +66,7 @@ class FAQ(models.Model):
 class Answer(models.Model):
     text = models.TextField(max_length=250)
     question = models.ForeignKey(to=Question, on_delete=models.CASCADE)
-    admin = models.ForeignKey(to=Admin, on_delete=models.CASCADE)  # Causal Admin
+    admin = models.ForeignKey(to=CustomAdmin, on_delete=models.CASCADE)  # Causal Admin
 
     def __str__(self) -> str:
         return self.text
@@ -68,7 +74,7 @@ class Answer(models.Model):
 
 class Regions(models.Model):
     name = models.CharField(max_length=120)
-    admin = models.ForeignKey(to=Admin, on_delete=models.CASCADE)
+    admin = models.ForeignKey(to=CustomAdmin, on_delete=models.CASCADE)
 
     def __str__(self):
         return f"Region: {self.name} by Admin: {self.admin}"

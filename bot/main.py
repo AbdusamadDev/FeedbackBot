@@ -8,10 +8,10 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.dispatcher import FSMContext
 from aiogram.utils import executor
 import sqlite3
+import logging
 
 
 # user_id = 2003049919
-ADMIN_IDS = [2003049919]
 API_TOKEN = "6195275934:AAEngBypgfNw3SwcV9uV_jdatZtMvojF9cs"
 option_callback = CallbackData("option", "name")
 answer_callback = CallbackData("answer", "id")
@@ -22,10 +22,31 @@ view_faqs_callback = CallbackData("admin_action", "action")
 region_callback = CallbackData("region", "name")
 storage = MemoryStorage()
 bot = Bot(token=API_TOKEN)
+logging.basicConfig(level=logging.INFO)
 dp = Dispatcher(bot, storage=storage)
 dp.middleware.setup(LoggingMiddleware())
 admin_response_state = {}
 user_data = {}
+
+
+def fetch_admin_ids(db_path="../db.sqlite3"):
+    """
+    Fetches all admin Telegram IDs from the api_customadmin table in the SQLite3 database.
+    """
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "SELECT telegram_id FROM api_customadmin WHERE telegram_id IS NOT NULL"
+        )
+        admin_ids = [row[0] for row in cursor.fetchall()]
+    except sqlite3.Error as e:
+        print(f"Database error: {e}")
+        admin_ids = []
+    finally:
+        conn.close()
+
+    return admin_ids
 
 
 class UserIsAdminFilter(BoundFilter):
@@ -35,7 +56,7 @@ class UserIsAdminFilter(BoundFilter):
         self.user_is_admin = user_is_admin
 
     async def check(self, message: types.Message):
-        user_is_admin = message.from_user.id in ADMIN_IDS
+        user_is_admin = message.from_user.id in fetch_admin_ids()
         return user_is_admin
 
 
@@ -46,6 +67,7 @@ class Registration(StatesGroup):
     first_name = State()
     phone_number = State()
     region = State()
+    manual_region = State()
 
 
 def fetch_question_text(question_id):
@@ -153,7 +175,9 @@ def add_user_to_database(user_data):
     cursor = conn.cursor()
     fullname = user_data["first_name"]
     phone_number = user_data["phone_number"]
-    region = user_data["region"]
+    region = user_data["region"] 
+    if not region:
+        region = user_data["manual_region"]
     telegram_id = user_data["telegram_id"]
     telegram_username = user_data.get("telegram_username", "")
     cursor.execute(
@@ -259,25 +283,38 @@ async def present_options(message: types.Message):
         reply_markup=inline_kb,
     )
 
+@dp.message_handler(state=Registration.manual_region)
+async def process_manual_region(message: types.Message, state: FSMContext):
+    async with state.proxy() as data:
+        data["region"] = message.text  # Save the manually entered region
+        data["telegram_id"] = message.from_user.id
+        data["telegram_username"] = message.from_user.username
+
+        # Optionally, you can add code here to save the new region to your regions table in the database
+
+        add_user_to_database(data)  # Save the user data, including the manually entered region, to the database
+    await state.finish()
+    user_data[message.from_user.id] = {"awaiting_question": True}
+    await present_options(message)  
 
 @dp.message_handler(commands=["start"], state=None)
 async def process_start_command(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
-    if user_id in ADMIN_IDS:
+    if user_id in fetch_admin_ids():
         inline_kb = InlineKeyboardMarkup(row_width=1)
         inline_kb.add(
             InlineKeyboardButton(
                 "Murojaatlarni ko'rish",
                 callback_data=view_questions_callback.new(action="view_questions"),
             ),
-            InlineKeyboardButton(
-                "Murojaatchilarni ko'rish",
-                callback_data=view_users_callback.new(action="view_users"),
-            ),
-            InlineKeyboardButton(
-                "FAQ ni ko'rish",
-                callback_data=view_faqs_callback.new(action="view_faqs"),
-            ),
+            # InlineKeyboardButton(
+            #     "Murojaatchilarni ko'rish",
+            #     callback_data=view_users_callback.new(action="view_users"),
+            # ),
+            # InlineKeyboardButton(
+            #     "FAQ ni ko'rish",
+            #     callback_data=view_faqs_callback.new(action="view_faqs"),
+            # ),
         )
         await message.reply(
             "Assalomu alaykum admin, hush kelibsiz!", reply_markup=inline_kb
@@ -312,20 +349,26 @@ async def process_phone_number(message: types.Message, state: FSMContext):
     ):
         async with state.proxy() as data:
             data["phone_number"] = message.text
-        await Registration.next()
         regions = fetch_regions()
-        inline_kb = InlineKeyboardMarkup(row_width=4)
-        for region in regions:
-            inline_kb.add(
-                InlineKeyboardButton(
-                    region, callback_data=region_callback.new(name=region)
+        if len(regions) != 0:
+            await Registration.next()
+            inline_kb = InlineKeyboardMarkup(row_width=4)
+            for region in regions:
+                inline_kb.add(
+                    InlineKeyboardButton(
+                        region, callback_data=region_callback.new(name=region)
+                    )
                 )
-            )
-        await message.reply("Turar joyingizni tanlang:", reply_markup=inline_kb)
+            await message.reply("Turar joyingizni tanlang:", reply_markup=inline_kb)
+        else:
+            # If no regions are found, ask the user to enter their region manually
+            await Registration.manual_region.set()
+            await message.reply("Mavjud bo'lmagan mintaqalar. Iltimos, o'z mintaqangizni kiriting:")
     else:
         await message.reply(
             "🚫 Iltimos telefon raqamingizni quyidagi formatda kiriting: +998123456789(101213 agar chet el nomer bolsa)."
         )
+
 
 
 @dp.callback_query_handler(region_callback.filter(), state=Registration.region)
@@ -403,7 +446,7 @@ async def process_user_question(message: types.Message):
             admin_message = (
                 f"ℹ️ℹ️ℹ️\nAssalomu alaykum!\n\nYangi So'rov:\n{message.text}"
             )
-            for admin_id in ADMIN_IDS:
+            for admin_id in fetch_admin_ids():
                 await bot.send_message(admin_id, admin_message)
         else:
             await message.reply("🚫 Foydalanuvchi topilmadi.")
@@ -534,8 +577,8 @@ async def save_admin_response(message: types.Message):
 async def admin_view_questions(query: types.CallbackQuery):
     questions = fetch_unanswered_questions()
     pages = list(chunked_questions_list(questions, ITEMS_PER_PAGE))
-    if not pages:  
-        await query.message.answer("No questions available.")
+    if not pages:
+        await query.message.answer("Murojaatlar mavjud emas.")
         return
     await display_page(query.message, pages, page=0)
     await query.answer()
