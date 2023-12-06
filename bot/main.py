@@ -175,7 +175,7 @@ def add_user_to_database(user_data):
     cursor = conn.cursor()
     fullname = user_data["first_name"]
     phone_number = user_data["phone_number"]
-    region = user_data["region"] 
+    region = user_data["region"]
     if not region:
         region = user_data["manual_region"]
     telegram_id = user_data["telegram_id"]
@@ -283,6 +283,7 @@ async def present_options(message: types.Message):
         reply_markup=inline_kb,
     )
 
+
 @dp.message_handler(state=Registration.manual_region)
 async def process_manual_region(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
@@ -292,10 +293,13 @@ async def process_manual_region(message: types.Message, state: FSMContext):
 
         # Optionally, you can add code here to save the new region to your regions table in the database
 
-        add_user_to_database(data)  # Save the user data, including the manually entered region, to the database
+        add_user_to_database(
+            data
+        )  # Save the user data, including the manually entered region, to the database
     await state.finish()
     user_data[message.from_user.id] = {"awaiting_question": True}
-    await present_options(message)  
+    await present_options(message)
+
 
 @dp.message_handler(commands=["start"], state=None)
 async def process_start_command(message: types.Message, state: FSMContext):
@@ -363,12 +367,13 @@ async def process_phone_number(message: types.Message, state: FSMContext):
         else:
             # If no regions are found, ask the user to enter their region manually
             await Registration.manual_region.set()
-            await message.reply("Mavjud bo'lmagan mintaqalar. Iltimos, o'z mintaqangizni kiriting:")
+            await message.reply(
+                "Mavjud bo'lmagan mintaqalar. Iltimos, o'z mintaqangizni kiriting:"
+            )
     else:
         await message.reply(
             "🚫 Iltimos telefon raqamingizni quyidagi formatda kiriting: +998123456789(101213 agar chet el nomer bolsa)."
         )
-
 
 
 @dp.callback_query_handler(region_callback.filter(), state=Registration.region)
@@ -456,7 +461,7 @@ async def process_user_question(message: types.Message):
 
 # --------------------------- ADMIN POSSILBE ACTIONS ---------------------------------
 # Define constants for pagination
-ITEMS_PER_PAGE = 10
+ITEMS_PER_PAGE = 5
 
 # Pagination callback data
 pagination_callback = CallbackData("paginate", "page")
@@ -530,14 +535,15 @@ async def navigate_pages(query: types.CallbackQuery, callback_data: dict):
     await query.answer()
 
 
-@dp.callback_query_handler(lambda query: query.data.startswith("answer_"))
-async def process_answer(query: types.CallbackQuery):
-    question_id = query.data.split("_")[1]
-    admin_response_state[query.from_user.id] = {
-        "awaiting_response": True,
-        "question_id": question_id,
-    }
-    await query.message.reply(f"ℹ️ Iltimos so'rov uchun javobingizni yozing")
+# @dp.callback_query_handler(lambda query: query.data.startswith("answer_"))
+# async def process_answer(query: types.CallbackQuery):
+#     question_id = query.data.split("_")[1]
+#     admin_response_state[query.from_user.id] = {
+#         "awaiting_response": True,
+#         "question_id": question_id,
+#     }
+#     print("process_answer function is running\n\n\n\n\n\n")
+#     await query.message.reply(f"ℹ️ Iltimos so'rov uchun javobingizni yozing")
 
 
 @dp.callback_query_handler(answer_callback.filter())
@@ -547,6 +553,9 @@ async def prompt_for_answer(query: types.CallbackQuery, callback_data: dict):
         "awaiting_response": True,
         "question_id": question_id,
     }
+    print("prompt_for_answer function is running\n\n\n\n\n\n")
+    await query.message.reply(f"ℹ️ Iltimos so'rov uchun javobingizni yozing")
+
 
 
 @dp.message_handler(lambda message: waiting_for_admin_response_condition(message))
@@ -569,7 +578,7 @@ async def save_admin_response(message: types.Message):
         cursor.execute("UPDATE api_question SET status=1 WHERE id=?", (question_id,))
         conn.commit()
         conn.close()
-        await message.reply(f"🥳🥳🥳\nJavob muvaffaqiyatli jonatildi: \n{question_id}.")
+        await message.reply(f"🥳🥳🥳\nJavob muvaffaqiyatli jonatildi!")
         admin_response_state.pop(admin_id)
 
 
