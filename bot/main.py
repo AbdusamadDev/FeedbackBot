@@ -404,33 +404,79 @@ async def process_user_question(message: types.Message):
 
 
 # --------------------------- ADMIN POSSILBE ACTIONS ---------------------------------
+# Define constants for pagination
+ITEMS_PER_PAGE = 10
+
+# Pagination callback data
+pagination_callback = CallbackData("paginate", "page")
+
+
+# Helper function to chunk the questions list into pages
+def chunked_questions_list(questions, items_per_page):
+    for i in range(0, len(questions), items_per_page):
+        yield questions[i : i + items_per_page]
+
+
+# Updated function to display paginated questions
 @dp.message_handler(commands=["savollar"], user_is_admin=True)
 async def view_questions(message: types.Message):
     questions = fetch_unanswered_questions()
-    inline_kb = InlineKeyboardMarkup()
+    pages = list(chunked_questions_list(questions, ITEMS_PER_PAGE))
 
-    # New code to create the question list string
-    question_list = "\n".join([f"{q_id}. {text}" for q_id, text in questions])
-    question_list += "\n_______________________________________\n"
+    # Call the function to display the first page
+    await display_page(message, pages, page=0)
 
-    temp_row = []
-    for q_id, text in questions:
-        button_text = f"{q_id}"
-        temp_row.append(
-            InlineKeyboardButton(
-                button_text, callback_data=answer_callback.new(id=q_id)
-            )
+
+# Function to display a specific page of questions
+async def display_page(message: types.Message, pages, page):
+    if pages:
+        questions_page = pages[page]
+        inline_kb = InlineKeyboardMarkup(row_width=5)
+
+        # Message text to include question text
+        message_text = "Choose a question:\n\n" + "\n".join(
+            [f"{q_id}. {text}" for q_id, text in questions_page]
         )
 
-        if len(temp_row) == 5:  # Once we have 6 buttons, add the row to the keyboard
-            inline_kb.row(*temp_row)
-            temp_row = []  # Reset the temp row
+        # Add question buttons
+        for q_id, _ in questions_page:
+            inline_kb.insert(
+                InlineKeyboardButton(
+                    text=str(q_id), callback_data=answer_callback.new(id=q_id)
+                )
+            )
 
-    if temp_row:  # Add any remaining buttons as a row
-        inline_kb.row(*temp_row)
+        # Add navigation buttons
+        if page > 0:
+            inline_kb.insert(
+                InlineKeyboardButton(
+                    text="<< avvalgisi",
+                    callback_data=pagination_callback.new(page=page - 1),
+                )
+            )
+        if page < len(pages) - 1:
+            inline_kb.insert(
+                InlineKeyboardButton(
+                    text="keyingisi >>",
+                    callback_data=pagination_callback.new(page=page + 1),
+                )
+            )
+        await message.answer(message_text, reply_markup=inline_kb)
+    else:
+        await message.answer("No questions available.")
 
-    # Send the question list along with the buttons
-    await message.reply(question_list, reply_markup=inline_kb)
+
+# Callback handler for page navigation
+@dp.callback_query_handler(pagination_callback.filter())
+async def navigate_pages(query: types.CallbackQuery, callback_data: dict):
+    page = int(callback_data["page"])
+    questions = fetch_unanswered_questions()
+    pages = list(chunked_questions_list(questions, ITEMS_PER_PAGE))
+    await bot.delete_message(
+        chat_id=query.message.chat.id, message_id=query.message.message_id
+    )
+    await display_page(query.message, pages, page=page)
+    await query.answer()
 
 
 @dp.callback_query_handler(lambda query: query.data.startswith("answer_"))
