@@ -533,30 +533,11 @@ async def save_admin_response(message: types.Message):
 @dp.callback_query_handler(view_questions_callback.filter(action="view_questions"))
 async def admin_view_questions(query: types.CallbackQuery):
     questions = fetch_unanswered_questions()
-    inline_kb = InlineKeyboardMarkup()
-
-    # New code to create the question list string
-    question_list = "\n".join([f"{q_id}. {text}" for q_id, text in questions])
-    question_list += "\n_______________________________________\n"
-
-    temp_row = []
-    for q_id, text in questions:
-        button_text = f"{q_id}"
-        temp_row.append(
-            InlineKeyboardButton(
-                button_text, callback_data=answer_callback.new(id=q_id)
-            )
-        )
-
-        if len(temp_row) == 5:
-            inline_kb.row(*temp_row)
-            temp_row = []
-
-    if temp_row:
-        inline_kb.row(*temp_row)
-
-    # Send the question list along with the buttons
-    await query.message.reply(question_list, reply_markup=inline_kb)
+    pages = list(chunked_questions_list(questions, ITEMS_PER_PAGE))
+    if not pages:  
+        await query.message.answer("No questions available.")
+        return
+    await display_page(query.message, pages, page=0)
     await query.answer()
 
 
