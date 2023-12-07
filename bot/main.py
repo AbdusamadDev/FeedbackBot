@@ -244,15 +244,8 @@ def waiting_for_admin_response_condition(message: types.Message):
 # ------------------------- USER POSSIBLE ACTIONS ---------------------------
 @dp.callback_query_handler(option_callback.filter(name="FAQ"))
 async def process_faq_option(query: types.CallbackQuery):
-    faqs = fetch_faqs()
-    for faq_id, question in faqs:
-        inline_kb = InlineKeyboardMarkup()
-        inline_kb.add(
-            InlineKeyboardButton(
-                "✅ Javobni ko'rish", callback_data=faq_callback.new(id=faq_id)
-            )
-        )
-        await query.message.reply(question, reply_markup=inline_kb)
+    await bot.delete_message(query.message.chat.id, query.message.message_id)
+    await display_faq_pages(query.message)
     await query.answer()
 
 
@@ -342,6 +335,74 @@ async def process_first_name(message: types.Message, state: FSMContext):
             data["first_name"] = message.text
         await Registration.next()
         await message.reply("Telefon raqamingizni kiriting:\nMasalan +998991234567")
+
+
+# Pagination callback data for FAQs
+faq_pagination_callback = CallbackData("faq_paginate", "page")
+
+
+# Helper function to chunk the FAQ list into pages
+def chunked_faqs_list(faqs, items_per_page):
+    for i in range(0, len(faqs), items_per_page):
+        yield faqs[i : i + items_per_page]
+
+
+async def display_faq_pages(message: types.Message, page=0):
+    faqs = fetch_faqs()  # Fetch all FAQ entries from the database.
+    pages = list(chunked_faqs_list(faqs, 3))  # 3 FAQs per page
+
+    if pages:
+        faqs_page = pages[page]
+        # Adjust the row_width to 4
+        inline_kb = InlineKeyboardMarkup(row_width=4)
+
+        # Message text to include FAQ questions
+        message_text = "Murojaatlardan birini tanlang:\n\n" + "\n".join(
+            [f"{faq_id}. {question}" for faq_id, question in faqs_page]
+        )
+
+        # Add FAQ question buttons
+        for faq_id, _ in faqs_page:
+            inline_kb.insert(
+                InlineKeyboardButton(
+                    text=str(faq_id), callback_data=faq_callback.new(id=faq_id)
+                )
+            )
+
+        # Add navigation buttons
+        if page > 0:
+            inline_kb.insert(
+                InlineKeyboardButton(
+                    text="<< avvalgisi",
+                    callback_data=faq_pagination_callback.new(page=page - 1),
+                )
+            )
+        if page < len(pages) - 1:
+            inline_kb.insert(
+                InlineKeyboardButton(
+                    text="keyingisi >>",
+                    callback_data=faq_pagination_callback.new(page=page + 1),
+                )
+            )
+        # Ensure to send a new message since the original was deleted
+        await message.answer(message_text, reply_markup=inline_kb)
+    else:
+        await message.answer("Hech qanday FAQ yo'q.")
+
+
+@dp.callback_query_handler(faq_pagination_callback.filter())
+async def navigate_faq_pages(query: types.CallbackQuery, callback_data: dict):
+    logging.info("navigate_faq_pages called with callback_data: %s", callback_data)
+    try:
+        page = int(callback_data["page"])
+        await bot.delete_message(
+            chat_id=query.message.chat.id, message_id=query.message.message_id
+        )
+        await display_faq_pages(query.message, page=page)
+        await query.answer()
+    except Exception as e:
+        logging.exception("Error in navigate_faq_pages: %s", e)
+        await query.answer("An error occurred.")
 
 
 @dp.message_handler(state=Registration.phone_number)
@@ -478,31 +539,22 @@ def chunked_questions_list(questions, items_per_page):
 async def view_questions(message: types.Message):
     questions = fetch_unanswered_questions()
     pages = list(chunked_questions_list(questions, ITEMS_PER_PAGE))
-
-    # Call the function to display the first page
     await display_page(message, pages, page=0)
 
 
-# Function to display a specific page of questions
 async def display_page(message: types.Message, pages, page):
     if pages:
         questions_page = pages[page]
         inline_kb = InlineKeyboardMarkup(row_width=5)
-
-        # Message text to include question text
         message_text = "Murojaatlardan birini tanlang:\n\n" + "\n".join(
             [f"{q_id}. {text}" for q_id, text in questions_page]
         )
-
-        # Add question buttons
         for q_id, _ in questions_page:
             inline_kb.insert(
                 InlineKeyboardButton(
                     text=str(q_id), callback_data=answer_callback.new(id=q_id)
                 )
             )
-
-        # Add navigation buttons
         if page > 0:
             inline_kb.insert(
                 InlineKeyboardButton(
@@ -522,7 +574,6 @@ async def display_page(message: types.Message, pages, page):
         await message.answer("Hech qanday murojaatlar yo'q.")
 
 
-# Callback handler for page navigation
 @dp.callback_query_handler(pagination_callback.filter())
 async def navigate_pages(query: types.CallbackQuery, callback_data: dict):
     page = int(callback_data["page"])
@@ -555,7 +606,6 @@ async def prompt_for_answer(query: types.CallbackQuery, callback_data: dict):
     }
     print("prompt_for_answer function is running\n\n\n\n\n\n")
     await query.message.reply(f"ℹ️ Iltimos so'rov uchun javobingizni yozing")
-
 
 
 @dp.message_handler(lambda message: waiting_for_admin_response_condition(message))
