@@ -59,7 +59,7 @@ class Question(models.Model):
     CHOICES = ((True, "Yes"), (False, "No"))
     text = models.CharField(max_length=300)
     status = models.BooleanField(choices=CHOICES, default=False)
-    category = models.ForeignKey(to=Category, on_delete=models.CASCADE)
+    category = models.ForeignKey(to=Category, on_delete=models.CASCADE, null=True)
     user = models.ForeignKey(to=User, on_delete=models.CASCADE)
 
     def is_answered(self):

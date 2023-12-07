@@ -312,8 +312,23 @@ async def process_start_command(message: types.Message, state: FSMContext):
             "Assalomu alaykum admin, hush kelibsiz!", reply_markup=inline_kb
         )
     elif is_user_in_database(user_id):
-        await message.reply("Assalomu alaykum, bugun qanday murojaatlaringiz bor?")
-        await present_options(message)
+        inline_kb = InlineKeyboardMarkup(row_width=3)
+        inline_kb.add(
+            InlineKeyboardButton(
+                "ℹ️ FAQ - Ko'p beriladigan savollar",
+                callback_data=option_callback.new(name="FAQ"),
+            )
+        )
+        inline_kb.add(
+            InlineKeyboardButton(
+                "ℹ️ Yo'nalishlarni korish",
+                callback_data=option_callback.new(name="Categories"),
+            )
+        )
+        await message.reply(
+            "Assalomu alaykum, bugun qanday murojaatlaringiz bor?",
+            reply_markup=inline_kb,
+        )
     else:
         await Registration.first_name.set()
         await message.reply("Hi!\nIsmingizni kiriting:")
@@ -448,42 +463,48 @@ async def process_region_selection(
 @dp.callback_query_handler(option_callback.filter(name="Categories"))
 async def process_categories_option(query: types.CallbackQuery):
     categories = fetch_categories()
-    if not categories:
-        await query.answer(
-            "🚫 Hali hech qanday yo'nalishlar yo'q\nSo'rovingizni yozishingiz mumkin."
-        )
-        return
     message_text = "Yo'nalishlarni tanlang:\n"
     inline_kb = InlineKeyboardMarkup(row_width=4)
+
+    # Add existing categories to the keyboard
     for index, category_name in enumerate(categories, start=1):
         category_id_button = InlineKeyboardButton(
             f"{index}. {category_name}", callback_data=f"category_{index}"
         )
         inline_kb.add(category_id_button)
+
+    # Add the "Other" option
+    inline_kb.add(InlineKeyboardButton("Boshqa", callback_data="category_other"))
+
     await query.message.reply(message_text, reply_markup=inline_kb)
     await query.answer()
 
 
 @dp.callback_query_handler(lambda query: query.data.startswith("category_"))
 async def process_category_selection(query: types.CallbackQuery):
-    category_index = int(query.data.split("_")[1])
-    categories = fetch_categories()
-    if 1 <= category_index <= len(categories):
-        selected_category = categories[category_index - 1]
-        user_telegram_id = query.from_user.id
-        user_database_id = get_user_database_id(user_telegram_id)
-        if user_database_id is not None:
-            await query.message.reply(
-                f"Iltimos, {selected_category} yo'nailishi bo'yicha savolingizni yozing."
-            )
-            user_data[user_telegram_id] = {
-                "category_id": category_index,
-                "awaiting_question": True,
-            }
-        else:
-            await query.answer("🚫 Foydalanuvchi topilmadi.")
+    category_data = query.data.split("_")
+
+    if category_data[1] == "other":
+        selected_category = None
     else:
-        await query.answer("🚫 Yaroqsiz yo'nalish tanlandi.")
+        category_index = int(category_data[1])
+        categories = fetch_categories()
+        if 1 <= category_index <= len(categories):
+            selected_category = category_index
+        else:
+            await query.answer("🚫 Yaroqsiz yo'nalish tanlandi.")
+            return
+
+    user_telegram_id = query.from_user.id
+    user_database_id = get_user_database_id(user_telegram_id)
+    if user_database_id is not None:
+        await query.message.reply(f"Iltimos, savolingizni yozing.")
+        user_data[user_telegram_id] = {
+            "category_id": selected_category,
+            "awaiting_question": True,
+        }
+    else:
+        await query.answer("🚫 Foydalanuvchi topilmadi.")
 
 
 @dp.message_handler(
@@ -493,13 +514,13 @@ async def process_user_question(message: types.Message):
     user_telegram_id = message.from_user.id
     user_data_entry = user_data.get(user_telegram_id, {})
     if "category_id" in user_data_entry and "awaiting_question" in user_data_entry:
-        category_id = user_data_entry["category_id"]
+        category_id = user_data_entry.get("category_id")
         user_data_entry.pop("category_id")
         user_data_entry.pop("awaiting_question")
         user_database_id = get_user_database_id(user_telegram_id)
         if user_database_id:
             create_new_question(message.text, False, category_id, user_database_id)
-            message_payload = """🥳🥳🥳\nE'tiboringiz uchun katta rahmat!\nSo'rovingiz hozirgina adminga jo'natildi, Tez orada so'rovingiz ko'rib chiqiladi"""
+            message_payload = "🥳🥳🥳\nE'tiboringiz uchun katta rahmat!\nSo'rovingiz hozirgina adminga jo'natildi."
             await message.reply(message_payload)
             admin_message = (
                 f"ℹ️ℹ️ℹ️\nAssalomu alaykum!\n\nYangi So'rov:\n{message.text}"
