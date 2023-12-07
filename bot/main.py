@@ -280,15 +280,10 @@ async def present_options(message: types.Message):
 @dp.message_handler(state=Registration.manual_region)
 async def process_manual_region(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
-        data["region"] = message.text  # Save the manually entered region
+        data["region"] = message.text
         data["telegram_id"] = message.from_user.id
         data["telegram_username"] = message.from_user.username
-
-        # Optionally, you can add code here to save the new region to your regions table in the database
-
-        add_user_to_database(
-            data
-        )  # Save the user data, including the manually entered region, to the database
+        add_user_to_database(data)
     await state.finish()
     user_data[message.from_user.id] = {"awaiting_question": True}
     await present_options(message)
@@ -409,8 +404,8 @@ async def navigate_faq_pages(query: types.CallbackQuery, callback_data: dict):
 async def process_phone_number(message: types.Message, state: FSMContext):
     if (
         message.text.startswith("+998")
-        and len(message.text.split(" ")) == 1
         and message.text[1:].isdigit()
+        and len(message.text[1:]) == 12
     ):
         async with state.proxy() as data:
             data["phone_number"] = message.text
@@ -426,11 +421,8 @@ async def process_phone_number(message: types.Message, state: FSMContext):
                 )
             await message.reply("Turar joyingizni tanlang:", reply_markup=inline_kb)
         else:
-            # If no regions are found, ask the user to enter their region manually
             await Registration.manual_region.set()
-            await message.reply(
-                "Mavjud bo'lmagan mintaqalar. Iltimos, o'z mintaqangizni kiriting:"
-            )
+            await message.reply("Turar joyingizni kiriting:")
     else:
         await message.reply(
             "🚫 Iltimos telefon raqamingizni quyidagi formatda kiriting: +998123456789(101213 agar chet el nomer bolsa)."
