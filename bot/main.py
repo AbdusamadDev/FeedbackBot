@@ -99,6 +99,21 @@ def fetch_question_text(question_id):
     return result[0] if result else None
 
 
+def fetch_admins_by_region(region):
+    """
+    Fetches Telegram IDs of admins who are assigned to the given region.
+    """
+    conn = sqlite3.connect("../db.sqlite3")
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "SELECT telegram_id FROM api_customadmin WHERE region = ?", (region,)
+        )
+        return [row[0] for row in cursor.fetchall()]
+    finally:
+        conn.close()
+
+
 def get_user_telegram_id_from_question(question_id):
     """
     Get the Telegram ID of the user who asked the question.
@@ -138,6 +153,22 @@ def save_answer_to_database(question_id, answer, admin_id):
     )
     conn.commit()
     conn.close()
+
+
+def fetch_user_region(telegram_id):
+    """
+    Fetches the user's region from the database using their Telegram ID.
+    """
+    conn = sqlite3.connect("../db.sqlite3")
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "SELECT region FROM api_user WHERE telegram_id = ?", (telegram_id,)
+        )
+        result = cursor.fetchone()
+        return result[0] if result else None
+    finally:
+        conn.close()
 
 
 def create_new_question(text, status, category_id, user_id):
@@ -566,42 +597,42 @@ async def process_category_selection(query: types.CallbackQuery):
 )
 async def process_user_question(message: types.Message):
     user_telegram_id = message.from_user.id
-    user_data_entry = user_data.get(user_telegram_id, {})
-    if "category_id" in user_data_entry and "awaiting_question" in user_data_entry:
-        category_id = user_data_entry.get("category_id")
-        user_data_entry.pop("category_id")
-        user_data_entry.pop("awaiting_question")
-        user_database_id = get_user_database_id(user_telegram_id)
-        if user_database_id:
-            create_new_question(message.text, False, category_id, user_database_id)
-            message_payload = "🥳🥳🥳\nE'tiboringiz uchun katta rahmat!\nSo'rovingiz hozirgina adminga jo'natildi."
-            await message.reply(message_payload)
-            admin_message = (
-                f"ℹ️ℹ️ℹ️\nAssalomu alaykum!\n\nYangi So'rov:\n{message.text}"
-            )
-            for admin_id in fetch_admin_ids():
-                await bot.send_message(admin_id, admin_message)
+    user_region = fetch_user_region(user_telegram_id)
+    admin_ids = fetch_admins_by_region(user_region)
+    admin_message = f"ℹ️ℹ️ℹ️\nAssalomu alaykum!\n\nYangi So'rov:\n{message.text}"
+    if user_region and admin_ids:
+        user_data_entry = user_data.get(user_telegram_id, {})
+        if "category_id" in user_data_entry and "awaiting_question" in user_data_entry:
+            category_id = user_data_entry.get("category_id")
+            user_data_entry.pop("category_id")
+            user_data_entry.pop("awaiting_question")
+            user_database_id = get_user_database_id(user_telegram_id)
+            if user_database_id:
+                create_new_question(message.text, False, category_id, user_database_id)
+                message_payload = "🥳🥳🥳\nE'tiboringiz uchun katta rahmat!\nSo'rovingiz hozirgina adminga jo'natildi."
+                await message.reply(message_payload)
+
+                for admin_id in admin_ids:
+                    await bot.send_message(admin_id, admin_message)
+            else:
+                await message.reply("🚫 Foydalanuvchi topilmadi.")
         else:
-            await message.reply("🚫 Foydalanuvchi topilmadi.")
+            await message.reply("🚫 Iltimos birinchi yo'nalishlardan birini tanlang.")
     else:
-        await message.reply("🚫 Iltimos birinchi yo'nalishlardan birini tanlang.")
+        for admin_id in fetch_admin_ids():
+            await bot.send_message(admin_id, admin_message)
 
 
 # --------------------------- ADMIN POSSILBE ACTIONS ---------------------------------
-# Define constants for pagination
 ITEMS_PER_PAGE = 5
-
-# Pagination callback data
 pagination_callback = CallbackData("paginate", "page")
 
 
-# Helper function to chunk the questions list into pages
 def chunked_questions_list(questions, items_per_page):
     for i in range(0, len(questions), items_per_page):
         yield questions[i : i + items_per_page]
 
 
-# Updated function to display paginated questions
 @dp.message_handler(commands=["savollar"], user_is_admin=True)
 async def view_questions(message: types.Message):
     questions = fetch_unanswered_questions()
