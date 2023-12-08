@@ -173,15 +173,40 @@ def fetch_user_region(telegram_id):
 
 import pandas as pd
 
+import pandas as pd
+from openpyxl.utils import get_column_letter
+from openpyxl import load_workbook
 
-def generate_excel():
-    data = fetch_questions_answers()
+
+def autosize_excel_columns(workbook, sheet_name):
+    for sheet in workbook.worksheets:
+        if sheet.title == sheet_name:
+            for column in sheet.columns:
+                max_length = 0
+                column = [cell for cell in column if cell.value]
+                for cell in column:
+                    try:
+                        if len(str(cell.value)) > max_length:
+                            max_length = len(cell.value)
+                    except:
+                        pass
+                adjusted_width = max_length + 2
+                sheet.column_dimensions[
+                    get_column_letter(column[0].column)
+                ].width = adjusted_width
+
+
+def generate_excel(data, file_path):
     df = pd.DataFrame(
         data, columns=["Question", "Answer", "Category", "User Name", "Admin Name"]
     )
-    excel_path = "./excel_file.xlsx"  # Specify the path where you want to save the Excel file
-    df.to_excel(excel_path, index=False)
-    return excel_path
+
+    with pd.ExcelWriter(file_path, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="Sheet1")
+        autosize_excel_columns(writer.book, "Sheet1")
+
+    # Return the path to the saved Excel file
+    return file_path
 
 
 def create_new_question(text, status, category_id, user_id):
@@ -838,9 +863,11 @@ async def admin_view_questions(query: types.CallbackQuery):
     await display_page(query.message, pages, page=0)
     await query.answer()
 
+
 @dp.callback_query_handler(view_questions_callback.filter(action="generate_excel"))
 async def admin_generate_excel(query: types.CallbackQuery):
-    excel_path = generate_excel()
+    data = fetch_questions_answers()
+    excel_path = generate_excel(data=data, file_path="./excel.xlsx")
     with open(excel_path, "rb") as file:
         await bot.send_document(query.from_user.id, file)
     await query.answer()
