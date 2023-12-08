@@ -3,21 +3,31 @@ from django.core.validators import RegexValidator
 
 from django.contrib.auth.models import AbstractUser
 from django.db import models
-import sqlite3
 
 
-# def get_regions():
-#     conn = sqlite3.connect("./db.sqlite3")
-#     cursor = conn.cursor()
-#     query = cursor.execute("""SELECT name FROM api_regions""")
-#     buildup = ((r[0], r[0]) for r in query.fetchall())
-#     print(buildup)
-#     return buildup
+uzbekistan_regions = [
+    ("Andijon", "Andijon"),
+    ("Buxoro", "Buxoro"),
+    ("Farg'ona", "Farg'ona"),
+    ("Jizzax", "Jizzax"),
+    ("Xorazm", "Xorazm"),
+    ("Namangan", "Namangan"),
+    ("Navoiy", "Navoiy"),
+    ("Qashqadaryo", "Qashqadaryo"),
+    ("Samarqand", "Samarqand"),
+    ("Sirdaryo", "Sirdaryo"),
+    ("Surxandaryo", "Surxandaryo"),
+    ("Toshkent", "Toshkent"),
+    ("Toshkent shahar", "Toshkent shahar"),
+    ("Qoraqalpog'iston", "Qoraqalpog'iston"),
+]
 
 
 class CustomAdmin(AbstractUser):
     telegram_id = models.IntegerField(null=True, unique=True)
-    # region = models.CharField(max_length=200, choices=get_regions(), default="nanna")
+    region = models.CharField(
+        max_length=200, choices=uzbekistan_regions, default="Belgilanmagan"
+    )
 
 
 class Category(models.Model):
@@ -54,6 +64,7 @@ class User(models.Model):
     class Meta:
         verbose_name_plural = "Xodimlar "
         verbose_name = "xodim "
+
 
 class Question(models.Model):
     CHOICES = ((True, "Yes"), (False, "No"))

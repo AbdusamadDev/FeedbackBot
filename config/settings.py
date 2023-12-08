@@ -4,8 +4,8 @@ import os
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = "django-insecure-z#df1831*$rq6%x*xfajx#t9lj+5q%m*cier!(@)sfa6gxieu8"
-DEBUG = False
-ALLOWED_HOSTS = ["  *"]
+DEBUG = True
+ALLOWED_HOSTS = ["*"]
 INSTALLED_APPS = [
     "django.contrib.auth",
     "django.contrib.contenttypes",

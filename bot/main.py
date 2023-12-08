@@ -28,6 +28,22 @@ dp.middleware.setup(LoggingMiddleware())
 admin_response_state = {}
 user_data = {}
 
+uzbekistan_regions = [
+    "Andijon",
+    "Buxoro",
+    "Farg'ona",
+    "Jizzax",
+    "Xorazm",
+    "Namangan",
+    "Navoiy",
+    "Qashqadaryo",
+    "Samarqand",
+    "Sirdaryo",
+    "Surxandaryo",
+    "Toshkent",
+    "Toshkent shahar",
+    "Qoraqalpogi'iston",
+]
 
 def fetch_admin_ids(db_path="../db.sqlite3"):
     """
@@ -447,23 +463,18 @@ async def process_phone_number(message: types.Message, state: FSMContext):
     ):
         async with state.proxy() as data:
             data["phone_number"] = message.text
-        regions = fetch_regions()
-        if len(regions) != 0:
-            await Registration.next()
-            inline_kb = InlineKeyboardMarkup(row_width=4)
-            for region in regions:
-                inline_kb.add(
-                    InlineKeyboardButton(
-                        region, callback_data=region_callback.new(name=region)
-                    )
+        await Registration.next()
+        inline_kb = InlineKeyboardMarkup(row_width=2)  # Adjust the row width as needed
+        for region in uzbekistan_regions:
+            inline_kb.add(
+                InlineKeyboardButton(
+                    region, callback_data=region_callback.new(name=region)
                 )
-            await message.reply("Turar joyingizni tanlang:", reply_markup=inline_kb)
-        else:
-            await Registration.manual_region.set()
-            await message.reply("Turar joyingizni kiriting:")
+            )
+        await message.reply("Turar joyingizni tanlang:", reply_markup=inline_kb)
     else:
         await message.reply(
-            "🚫 Iltimos telefon raqamingizni quyidagi formatda kiriting: +998123456789(101213 agar chet el nomer bolsa)."
+            "🚫 Iltimos telefon raqamingizni quyidagi formatda kiriting: +998123456789."
         )
 
 
@@ -476,7 +487,6 @@ async def process_region_selection(
         data["region"] = region
         data["telegram_id"] = query.from_user.id
         data["telegram_username"] = query.from_user.username
-        print(data)
         add_user_to_database(data)
     await state.finish()
     user_data[query.from_user.id] = {"awaiting_question": True}
@@ -643,9 +653,7 @@ answered_question_callback = CallbackData("answered_question", "id")
 @dp.callback_query_handler(answered_question_callback.filter())
 async def show_answered_question(query: types.CallbackQuery, callback_data: dict):
     question_id = callback_data["id"]
-    answer = fetch_answer_for_question(
-        question_id
-    )  # You need to implement this function
+    answer = fetch_answer_for_question(question_id)
     if answer:
         await query.message.answer(f"Question ID: {question_id}\nAnswer: {answer}")
     else:
@@ -655,10 +663,7 @@ async def show_answered_question(query: types.CallbackQuery, callback_data: dict
 
 async def display_answered_questions_page(message: types.Message, page=0):
     answered_questions = fetch_answered_questions()
-    pages = list(
-        chunked_questions_list(answered_questions, ITEMS_PER_PAGE)
-    )  # Assuming ITEMS_PER_PAGE is defined globally
-
+    pages = list(chunked_questions_list(answered_questions, ITEMS_PER_PAGE))
     if pages:
         questions_page = pages[page]
         inline_kb = InlineKeyboardMarkup(row_width=5)
@@ -668,7 +673,8 @@ async def display_answered_questions_page(message: types.Message, page=0):
         for q_id, _ in questions_page:
             inline_kb.insert(
                 InlineKeyboardButton(
-                    text=str(q_id), callback_data=answered_question_callback.new(id=q_id)
+                    text=str(q_id),
+                    callback_data=answered_question_callback.new(id=q_id),
                 )
             )
         if page > 0:
