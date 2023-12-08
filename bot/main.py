@@ -171,6 +171,19 @@ def fetch_user_region(telegram_id):
         conn.close()
 
 
+import pandas as pd
+
+
+def generate_excel():
+    data = fetch_questions_answers()
+    df = pd.DataFrame(
+        data, columns=["Question", "Answer", "Category", "User Name", "Admin Name"]
+    )
+    excel_path = "./excel_file.xlsx"  # Specify the path where you want to save the Excel file
+    df.to_excel(excel_path, index=False)
+    return excel_path
+
+
 def create_new_question(text, status, category_id, user_id):
     """
     Create a new question in the SQLite3 database.
@@ -186,6 +199,25 @@ def create_new_question(text, status, category_id, user_id):
     )
     conn.commit()
     conn.close()
+
+
+def fetch_questions_answers():
+    conn = sqlite3.connect("../db.sqlite3")
+    cursor = conn.cursor()
+    try:
+        query = """
+            SELECT q.text, a.text, ca.title, u.fullname, ad.username
+            FROM api_question AS q
+            LEFT JOIN api_answer AS a ON q.id = a.question_id
+            LEFT JOIN api_category AS ca ON q.category_id = ca.id
+            LEFT JOIN api_user AS u ON q.user_id = u.id
+            LEFT JOIN api_customadmin AS ad ON a.admin_id = ad.id
+        """
+        cursor.execute(query)
+        data = cursor.fetchall()
+        return data
+    finally:
+        conn.close()
 
 
 def get_user_database_id(telegram_id):
@@ -804,6 +836,13 @@ async def admin_view_questions(query: types.CallbackQuery):
         await query.message.answer("Murojaatlar mavjud emas.")
         return
     await display_page(query.message, pages, page=0)
+    await query.answer()
+
+@dp.callback_query_handler(view_questions_callback.filter(action="generate_excel"))
+async def admin_generate_excel(query: types.CallbackQuery):
+    excel_path = generate_excel()
+    with open(excel_path, "rb") as file:
+        await bot.send_document(query.from_user.id, file)
     await query.answer()
 
 
