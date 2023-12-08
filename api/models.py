@@ -6,18 +6,18 @@ from django.db import models
 import sqlite3
 
 
-def get_regions():
-    conn = sqlite3.connect("./db.sqlite3")
-    cursor = conn.cursor()
-    query = cursor.execute("""SELECT name FROM api_regions""")
-    buildup = ((r[0], r[0]) for r in query.fetchall())
-    print(buildup)
-    return buildup
+# def get_regions():
+#     conn = sqlite3.connect("./db.sqlite3")
+#     cursor = conn.cursor()
+#     query = cursor.execute("""SELECT name FROM api_regions""")
+#     buildup = ((r[0], r[0]) for r in query.fetchall())
+#     print(buildup)
+#     return buildup
 
 
 class CustomAdmin(AbstractUser):
     telegram_id = models.IntegerField(null=True, unique=True)
-    region = models.CharField(max_length=200, choices=get_regions(), default="nanna")
+    # region = models.CharField(max_length=200, choices=get_regions(), default="nanna")
 
 
 class Category(models.Model):

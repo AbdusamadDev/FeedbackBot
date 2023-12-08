@@ -97,6 +97,15 @@ def get_user_telegram_id_from_question(question_id):
     return result[0] if result else None
 
 
+def fetch_answered_questions():
+    conn = sqlite3.connect("../db.sqlite3")
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, text FROM api_question WHERE status = 1")
+    questions = cursor.fetchall()
+    conn.close()
+    return questions
+
+
 def save_answer_to_database(question_id, answer, admin_id):
     """
     Save the admin's answer to the `api_answer` table.
@@ -165,6 +174,18 @@ def fetch_categories():
     categories = cursor.fetchall()
     conn.close()
     return [category[0] for category in categories]
+
+
+def fetch_answer_for_question(question_id):
+    """
+    Fetch the answer text from the database using the question ID.
+    """
+    conn = sqlite3.connect("../db.sqlite3")
+    cursor = conn.cursor()
+    cursor.execute("SELECT text FROM api_answer WHERE question_id = ?", (question_id,))
+    result = cursor.fetchone()
+    conn.close()
+    return result[0] if result else None
 
 
 def add_user_to_database(user_data):
@@ -296,17 +317,19 @@ async def process_start_command(message: types.Message, state: FSMContext):
         inline_kb = InlineKeyboardMarkup(row_width=1)
         inline_kb.add(
             InlineKeyboardButton(
-                "Murojaatlarni ko'rish",
+                "View Questions",
                 callback_data=view_questions_callback.new(action="view_questions"),
             ),
-            # InlineKeyboardButton(
-            #     "Murojaatchilarni ko'rish",
-            #     callback_data=view_users_callback.new(action="view_users"),
-            # ),
-            # InlineKeyboardButton(
-            #     "FAQ ni ko'rish",
-            #     callback_data=view_faqs_callback.new(action="view_faqs"),
-            # ),
+            InlineKeyboardButton(
+                "Generate Excel",
+                callback_data=view_questions_callback.new(action="generate_excel"),
+            ),
+            InlineKeyboardButton(
+                "See Answered Questions",
+                callback_data=view_questions_callback.new(
+                    action="view_answered_questions"
+                ),
+            ),
         )
         await message.reply(
             "Assalomu alaykum admin, hush kelibsiz!", reply_markup=inline_kb
@@ -599,17 +622,6 @@ async def navigate_pages(query: types.CallbackQuery, callback_data: dict):
     await query.answer()
 
 
-# @dp.callback_query_handler(lambda query: query.data.startswith("answer_"))
-# async def process_answer(query: types.CallbackQuery):
-#     question_id = query.data.split("_")[1]
-#     admin_response_state[query.from_user.id] = {
-#         "awaiting_response": True,
-#         "question_id": question_id,
-#     }
-#     print("process_answer function is running\n\n\n\n\n\n")
-#     await query.message.reply(f"ℹ️ Iltimos so'rov uchun javobingizni yozing")
-
-
 @dp.callback_query_handler(answer_callback.filter())
 async def prompt_for_answer(query: types.CallbackQuery, callback_data: dict):
     question_id = callback_data["id"]
@@ -619,6 +631,67 @@ async def prompt_for_answer(query: types.CallbackQuery, callback_data: dict):
     }
     print("prompt_for_answer function is running\n\n\n\n\n\n")
     await query.message.reply(f"ℹ️ Iltimos so'rov uchun javobingizni yozing")
+
+
+# Pagination callback data for answered questions
+answered_questions_pagination_callback = CallbackData(
+    "answered_questions_paginate", "page"
+)
+answered_question_callback = CallbackData("answered_question", "id")
+
+
+@dp.callback_query_handler(answered_question_callback.filter())
+async def show_answered_question(query: types.CallbackQuery, callback_data: dict):
+    question_id = callback_data["id"]
+    answer = fetch_answer_for_question(
+        question_id
+    )  # You need to implement this function
+    if answer:
+        await query.message.answer(f"Question ID: {question_id}\nAnswer: {answer}")
+    else:
+        await query.message.answer("No answer found for this question.")
+    await query.answer()
+
+
+async def display_answered_questions_page(message: types.Message, page=0):
+    answered_questions = fetch_answered_questions()
+    pages = list(
+        chunked_questions_list(answered_questions, ITEMS_PER_PAGE)
+    )  # Assuming ITEMS_PER_PAGE is defined globally
+
+    if pages:
+        questions_page = pages[page]
+        inline_kb = InlineKeyboardMarkup(row_width=5)
+        message_text = "Answered Questions:\n\n" + "\n".join(
+            [f"{q_id}. {text}" for q_id, text in questions_page]
+        )
+        for q_id, _ in questions_page:
+            inline_kb.insert(
+                InlineKeyboardButton(
+                    text=str(q_id), callback_data=answered_question_callback.new(id=q_id)
+                )
+            )
+        if page > 0:
+            inline_kb.insert(
+                InlineKeyboardButton(
+                    text="<< Previous",
+                    callback_data=answered_questions_pagination_callback.new(
+                        page=page - 1
+                    ),
+                )
+            )
+        if page < len(pages) - 1:
+            inline_kb.insert(
+                InlineKeyboardButton(
+                    text="Next >>",
+                    callback_data=answered_questions_pagination_callback.new(
+                        page=page + 1
+                    ),
+                )
+            )
+        await message.answer(message_text, reply_markup=inline_kb)
+    else:
+        await message.answer("No answered questions found.")
 
 
 @dp.message_handler(lambda message: waiting_for_admin_response_condition(message))
@@ -643,6 +716,26 @@ async def save_admin_response(message: types.Message):
         conn.close()
         await message.reply(f"🥳🥳🥳\nJavob muvaffaqiyatli jonatildi!")
         admin_response_state.pop(admin_id)
+
+
+@dp.callback_query_handler(
+    view_questions_callback.filter(action="view_answered_questions")
+)
+async def admin_view_answered_questions(query: types.CallbackQuery):
+    await display_answered_questions_page(query.message)
+    await query.answer()
+
+
+@dp.callback_query_handler(answered_questions_pagination_callback.filter())
+async def navigate_answered_questions_pages(
+    query: types.CallbackQuery, callback_data: dict
+):
+    page = int(callback_data["page"])
+    await bot.delete_message(
+        chat_id=query.message.chat.id, message_id=query.message.message_id
+    )
+    await display_answered_questions_page(query.message, page=page)
+    await query.answer()
 
 
 @dp.callback_query_handler(view_questions_callback.filter(action="view_questions"))
