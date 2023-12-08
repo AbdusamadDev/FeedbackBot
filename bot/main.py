@@ -45,6 +45,7 @@ uzbekistan_regions = [
     "Qoraqalpogi'iston",
 ]
 
+
 def fetch_admin_ids(db_path="../db.sqlite3"):
     """
     Fetches all admin Telegram IDs from the api_customadmin table in the SQLite3 database.
@@ -76,14 +77,14 @@ class UserIsAdminFilter(BoundFilter):
         return user_is_admin
 
 
-dp.filters_factory.bind(UserIsAdminFilter)
-
-
 class Registration(StatesGroup):
     first_name = State()
     phone_number = State()
     region = State()
-    manual_region = State()
+    subregion = State()  # New state for subregion
+
+
+dp.filters_factory.bind(UserIsAdminFilter)
 
 
 def fetch_question_text(question_id):
@@ -217,12 +218,20 @@ def add_user_to_database(user_data):
         region = user_data["manual_region"]
     telegram_id = user_data["telegram_id"]
     telegram_username = user_data.get("telegram_username", "")
+    subregion = user_data.get("subregion", "")
     cursor.execute(
         """
-        INSERT INTO api_user (fullname, phone_number, region, telegram_id, telegram_username) 
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO api_user (fullname, phone_number, region, telegram_id, telegram_username, subregion) 
+        VALUES (?, ?, ?, ?, ?, ?)
     """,
-        (fullname, phone_number, region, telegram_id, telegram_username),
+        (
+            fullname,
+            phone_number,
+            region,
+            telegram_id,
+            telegram_username,
+            subregion,
+        ),
     )
     conn.commit()
     conn.close()
@@ -281,7 +290,6 @@ def waiting_for_admin_response_condition(message: types.Message):
 # ------------------------- USER POSSIBLE ACTIONS ---------------------------
 @dp.callback_query_handler(option_callback.filter(name="FAQ"))
 async def process_faq_option(query: types.CallbackQuery):
-    await bot.delete_message(query.message.chat.id, query.message.message_id)
     await display_faq_pages(query.message)
     await query.answer()
 
@@ -314,16 +322,16 @@ async def present_options(message: types.Message):
     )
 
 
-@dp.message_handler(state=Registration.manual_region)
-async def process_manual_region(message: types.Message, state: FSMContext):
-    async with state.proxy() as data:
-        data["region"] = message.text
-        data["telegram_id"] = message.from_user.id
-        data["telegram_username"] = message.from_user.username
-        add_user_to_database(data)
-    await state.finish()
-    user_data[message.from_user.id] = {"awaiting_question": True}
-    await present_options(message)
+# @dp.message_handler(state=Registration.manual_region)
+# async def process_manual_region(message: types.Message, state: FSMContext):
+#     async with state.proxy() as data:
+#         data["region"] = message.text
+#         data["telegram_id"] = message.from_user.id
+#         data["telegram_username"] = message.from_user.username
+#         add_user_to_database(data)
+#     await state.finish()
+#     user_data[message.from_user.id] = {"awaiting_question": True}
+#     await present_options(message)
 
 
 @dp.message_handler(commands=["start"], state=None)
@@ -382,6 +390,8 @@ async def process_first_name(message: types.Message, state: FSMContext):
     else:
         async with state.proxy() as data:
             data["first_name"] = message.text
+            data["telegram_id"] = message.from_user.id
+            data["telegram_username"] = message.from_user.username
         await Registration.next()
         await message.reply("Telefon raqamingizni kiriting:\nMasalan +998991234567")
 
@@ -401,6 +411,7 @@ async def display_faq_pages(message: types.Message, page=0):
     pages = list(chunked_faqs_list(faqs, 3))  # 3 FAQs per page
 
     if pages:
+        await bot.delete_message(message.chat.id, message.message_id)
         faqs_page = pages[page]
         # Adjust the row_width to 4
         inline_kb = InlineKeyboardMarkup(row_width=4)
@@ -485,12 +496,22 @@ async def process_region_selection(
     region = callback_data["name"]
     async with state.proxy() as data:
         data["region"] = region
-        data["telegram_id"] = query.from_user.id
-        data["telegram_username"] = query.from_user.username
+    # Transition to subregion state instead of finishing
+    await Registration.subregion.set()
+    await query.message.reply(
+        "Please enter the smaller part of the region you live in:"
+    )
+
+
+@dp.message_handler(state=Registration.subregion)
+async def process_subregion(message: types.Message, state: FSMContext):
+    subregion = message.text
+    async with state.proxy() as data:
+        data["subregion"] = subregion
+        # Additional data processing or validation can be added here
         add_user_to_database(data)
     await state.finish()
-    user_data[query.from_user.id] = {"awaiting_question": True}
-    await present_options(query.message)
+    await present_options(message)
 
 
 @dp.callback_query_handler(option_callback.filter(name="Categories"))

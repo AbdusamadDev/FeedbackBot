@@ -55,6 +55,7 @@ class User(models.Model):
 
     phone_number = models.CharField(validators=[phone_regex], max_length=17)
     region = models.CharField(max_length=50)
+    subregion = models.CharField(max_length=150, default="asdasd")
     telegram_id = models.IntegerField(default=0)
     telegram_username = models.CharField(max_length=60, default="asda")
 
