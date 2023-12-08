@@ -4,14 +4,15 @@ from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.utils.callback_data import CallbackData
 from aiogram.dispatcher.filters import BoundFilter
+from openpyxl.utils import get_column_letter
 from aiogram import Bot, Dispatcher, types
 from aiogram.dispatcher import FSMContext
 from aiogram.utils import executor
+import pandas as pd
 import sqlite3
 import logging
 
 
-# user_id = 2003049919
 API_TOKEN = "6195275934:AAEngBypgfNw3SwcV9uV_jdatZtMvojF9cs"
 option_callback = CallbackData("option", "name")
 answer_callback = CallbackData("answer", "id")
@@ -172,8 +173,6 @@ def fetch_user_region(telegram_id):
 
 
 import pandas as pd
-
-import pandas as pd
 from openpyxl.utils import get_column_letter
 from openpyxl import load_workbook
 
@@ -197,33 +196,32 @@ def autosize_excel_columns(workbook, sheet_name):
 
 
 def generate_excel(data, file_path):
-    df = pd.DataFrame(
-        data, columns=["Question", "Answer", "Category", "User Name", "Admin Name"]
-    )
-
+    df = pd.DataFrame(data, columns=["Question", "Answer", "Category", "User Name"])
     with pd.ExcelWriter(file_path, engine="openpyxl") as writer:
         df.to_excel(writer, index=False, sheet_name="Sheet1")
         autosize_excel_columns(writer.book, "Sheet1")
-
-    # Return the path to the saved Excel file
     return file_path
 
 
 def create_new_question(text, status, category_id, user_id):
     """
-    Create a new question in the SQLite3 database.
+    Create a new question in the SQLite3 database and return the question ID.
     """
     conn = sqlite3.connect("../db.sqlite3")
     cursor = conn.cursor()
-    cursor.execute(
-        """
-        INSERT INTO api_question (text, status, category_id, user_id)
-        VALUES (?, ?, ?, ?)
-    """,
-        (text, status, category_id, user_id),
-    )
-    conn.commit()
-    conn.close()
+    try:
+        cursor.execute(
+            """
+            INSERT INTO api_question (text, status, category_id, user_id)
+            VALUES (?, ?, ?, ?)
+            """,
+            (text, status, category_id, user_id),
+        )
+        conn.commit()
+        return cursor.lastrowid
+    finally:
+        conn.close()
+
 
 
 def fetch_questions_answers():
@@ -656,28 +654,39 @@ async def process_user_question(message: types.Message):
     user_telegram_id = message.from_user.id
     user_region = fetch_user_region(user_telegram_id)
     admin_ids = fetch_admins_by_region(user_region)
+    user_database_id = get_user_database_id(user_telegram_id)
     admin_message = f"ℹ️ℹ️ℹ️\nAssalomu alaykum!\n\nYangi So'rov:\n{message.text}"
+    user_data_entry = user_data.get(user_telegram_id, {})
+    category_id = user_data_entry.get("category_id")
+    question_id = create_new_question(
+        message.text, False, category_id, user_database_id
+    )
+    inline_kb = InlineKeyboardMarkup()
+    inline_kb.add(
+        InlineKeyboardButton(
+            "Answer to this Question",
+            callback_data=answer_callback.new(id=question_id),
+        )
+    )
     if user_region and admin_ids:
-        user_data_entry = user_data.get(user_telegram_id, {})
         if "category_id" in user_data_entry and "awaiting_question" in user_data_entry:
-            category_id = user_data_entry.get("category_id")
             user_data_entry.pop("category_id")
             user_data_entry.pop("awaiting_question")
-            user_database_id = get_user_database_id(user_telegram_id)
             if user_database_id:
-                create_new_question(message.text, False, category_id, user_database_id)
                 message_payload = "🥳🥳🥳\nE'tiboringiz uchun katta rahmat!\nSo'rovingiz hozirgina adminga jo'natildi."
                 await message.reply(message_payload)
 
                 for admin_id in admin_ids:
-                    await bot.send_message(admin_id, admin_message)
+                    await bot.send_message(
+                        admin_id, admin_message, reply_markup=inline_kb
+                    )
             else:
                 await message.reply("🚫 Foydalanuvchi topilmadi.")
         else:
             await message.reply("🚫 Iltimos birinchi yo'nalishlardan birini tanlang.")
     else:
         for admin_id in fetch_admin_ids():
-            await bot.send_message(admin_id, admin_message)
+            await bot.send_message(admin_id, admin_message, reply_markup=inline_kb)
 
 
 # --------------------------- ADMIN POSSILBE ACTIONS ---------------------------------
@@ -867,7 +876,7 @@ async def admin_view_questions(query: types.CallbackQuery):
 @dp.callback_query_handler(view_questions_callback.filter(action="generate_excel"))
 async def admin_generate_excel(query: types.CallbackQuery):
     data = fetch_questions_answers()
-    excel_path = generate_excel(data=data, file_path="./excel.xlsx")
+    excel_path = generate_excel(data=data[:-2], file_path="./excel.xlsx")
     with open(excel_path, "rb") as file:
         await bot.send_document(query.from_user.id, file)
     await query.answer()
