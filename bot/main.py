@@ -11,6 +11,7 @@ from aiogram.utils import executor
 import pandas as pd
 import sqlite3
 import logging
+import random
 
 
 API_TOKEN = "6195275934:AAEngBypgfNw3SwcV9uV_jdatZtMvojF9cs"
@@ -583,7 +584,7 @@ async def process_region_selection(
     # Transition to subregion state instead of finishing
     await Registration.subregion.set()
     await query.message.reply(
-        "Endi viloyatdagi hu:"
+        "Endi viloyatdagi hududingizni tanlang:"
     )
 
 
@@ -601,7 +602,7 @@ async def process_subregion(message: types.Message, state: FSMContext):
 @dp.callback_query_handler(option_callback.filter(name="Categories"))
 async def process_categories_option(query: types.CallbackQuery):
     categories = fetch_categories()
-    message_text = "Yo'nalishlarni tanlang:\n"
+    message_text = "Yo'nalishlardan birini tanlang:\n"
     inline_kb = InlineKeyboardMarkup(row_width=4)
 
     # Add existing categories to the keyboard
@@ -770,7 +771,7 @@ async def show_answered_question(query: types.CallbackQuery, callback_data: dict
     question_id = callback_data["id"]
     answer = fetch_answer_for_question(question_id)
     if answer:
-        await query.message.answer(f"Question ID: {question_id}\nAnswer: {answer}")
+        await query.message.answer(f"Murojaat: {question_id}\Javobi: {answer}")
     else:
         await query.message.answer("Bu murojaat uchun javob topilmadi.")
     await query.answer()
@@ -812,7 +813,7 @@ async def display_answered_questions_page(message: types.Message, page=0):
             )
         await message.answer(message_text, reply_markup=inline_kb)
     else:
-        await message.answer("No answered questions found.")
+        await message.answer("Hech qanday javob berilgan murojaatlar topilmadi.")
 
 
 @dp.message_handler(lambda message: waiting_for_admin_response_condition(message))
@@ -828,7 +829,7 @@ async def save_admin_response(message: types.Message):
         if user_telegram_id:
             await bot.send_message(
                 user_telegram_id,
-                f"Berilgan savol: {question}\nAdmindan Javob: {response}",
+                f"Ushbu murojaat uchun: {question}\nAdmindan Javob: {response}",
             )
         conn = sqlite3.connect("../db.sqlite3")
         cursor = conn.cursor()
@@ -873,7 +874,8 @@ async def admin_view_questions(query: types.CallbackQuery):
 @dp.callback_query_handler(view_questions_callback.filter(action="generate_excel"))
 async def admin_generate_excel(query: types.CallbackQuery):
     data = fetch_questions_answers()
-    excel_path = generate_excel(data=data[:-2], file_path="./excel.xlsx")
+    
+    excel_path = generate_excel(data=data[:-2], file_path=f"./files/{str(random.randint(10000, 100000000))}.xlsx")
     with open(excel_path, "rb") as file:
         await bot.send_document(query.from_user.id, file)
     await query.answer()
