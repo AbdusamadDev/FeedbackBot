@@ -632,7 +632,7 @@ async def process_category_selection(query: types.CallbackQuery):
     user_telegram_id = query.from_user.id
     user_database_id = get_user_database_id(user_telegram_id)
     if user_database_id is not None:
-        await query.message.reply(f"Iltimos, savolingizni yozing.")
+        await query.message.reply(f"Murojaatingizni yozib qoldiring.")
         user_data[user_telegram_id] = {
             "category_id": selected_category,
             "awaiting_question": True,
@@ -649,7 +649,7 @@ async def process_user_question(message: types.Message):
     user_region = fetch_user_region(user_telegram_id)
     admin_ids = fetch_admins_by_region(user_region)
     user_database_id = get_user_database_id(user_telegram_id)
-    admin_message = f"ℹ️ℹ️ℹ️\nAssalomu alaykum!\n\nYangi So'rov:\n{message.text}"
+    admin_message = f"ℹ️ℹ️ℹ️\nAssalomu alaykum!\n\nYangi murojaat:\n{message.text}"
     user_data_entry = user_data.get(user_telegram_id, {})
     category_id = user_data_entry.get("category_id")
     question_id = create_new_question(
@@ -658,7 +658,7 @@ async def process_user_question(message: types.Message):
     inline_kb = InlineKeyboardMarkup()
     inline_kb.add(
         InlineKeyboardButton(
-            "Answer to this Question",
+            "Savolga javob berish",
             callback_data=answer_callback.new(id=question_id),
         )
     )
@@ -729,7 +729,7 @@ async def display_page(message: types.Message, pages, page):
             )
         await message.answer(message_text, reply_markup=inline_kb)
     else:
-        await message.answer("Hech qanday murojaatlar yo'q.")
+        await message.answer("hech qanday murojaatlar yo'q.")
 
 
 @dp.callback_query_handler(pagination_callback.filter())
