@@ -538,9 +538,9 @@ async def display_faq_pages(message: types.Message, page=0):
 async def navigate_faq_pages(query: types.CallbackQuery, callback_data: dict):
     try:
         page = int(callback_data["page"])
-        await bot.delete_message(
-            chat_id=query.message.chat.id, message_id=query.message.message_id
-        )
+        # await bot.delete_message(
+        #     chat_id=query.message.chat.id, message_id=query.message.message_id
+        # )
         await display_faq_pages(query.message, page=page)
         await query.answer()
     except Exception as e:
@@ -882,4 +882,4 @@ async def admin_generate_excel(query: types.CallbackQuery):
 
 
 if __name__ == "__main__":
-    executor.start_polling(dp)
+    executor.start_polling(dp, skip_updates=True)
