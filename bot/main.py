@@ -172,11 +172,6 @@ def fetch_user_region(telegram_id):
         conn.close()
 
 
-import pandas as pd
-from openpyxl.utils import get_column_letter
-from openpyxl import load_workbook
-
-
 def autosize_excel_columns(workbook, sheet_name):
     for sheet in workbook.worksheets:
         if sheet.title == sheet_name:
@@ -221,7 +216,6 @@ def create_new_question(text, status, category_id, user_id):
         return cursor.lastrowid
     finally:
         conn.close()
-
 
 
 def fetch_questions_answers():
