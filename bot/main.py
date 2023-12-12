@@ -637,7 +637,7 @@ async def process_category_selection(query: types.CallbackQuery):
     user_telegram_id = query.from_user.id
     user_database_id = get_user_database_id(user_telegram_id)
     if user_database_id is not None:
-        await query.message.reply(f"Murojaatingizni yozib qoldiring.")
+        await query.message.reply(f"Murojaatingizning qisqacha mazmunini yozib qoldiring.")
         user_data[user_telegram_id] = {
             "category_id": selected_category,
             "awaiting_question": True,
