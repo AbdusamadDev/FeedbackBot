@@ -421,22 +421,23 @@ async def process_start_command(message: types.Message, state: FSMContext):
         inline_kb = InlineKeyboardMarkup(row_width=1)
         inline_kb.add(
             InlineKeyboardButton(
-                "View Questions",
+                "Murojaatlarni ko'rish",
                 callback_data=view_questions_callback.new(action="view_questions"),
             ),
             InlineKeyboardButton(
-                "Generate Excel",
+                "Excelga generatsiya qilish",
                 callback_data=view_questions_callback.new(action="generate_excel"),
             ),
             InlineKeyboardButton(
-                "See Answered Questions",
+                "Javob berilgan murojaatlarni ko'rish",
                 callback_data=view_questions_callback.new(
                     action="view_answered_questions"
                 ),
             ),
         )
         await message.reply(
-            "Assalomu alaykum admin, hush kelibsiz!", reply_markup=inline_kb
+            "Assalomu alaykum admin, hush kelibsiz!\nQuyidagilardan birini tanlang",
+            reply_markup=inline_kb,
         )
     elif is_user_in_database(user_id):
         inline_kb = InlineKeyboardMarkup(row_width=3)
@@ -458,7 +459,9 @@ async def process_start_command(message: types.Message, state: FSMContext):
         )
     else:
         await Registration.first_name.set()
-        await message.reply("Hi!\nIsmingizni kiriting:")
+        await message.reply(
+            "Assalomu alaykum!\nMurojaatingizni qoldirish uchun ro'yxatdan o'tishingiz kerak\nIsmingizni familiyangiz va otaliq ismingizni kiriting:"
+        )
 
 
 @dp.message_handler(state=Registration.first_name)
@@ -532,7 +535,6 @@ async def display_faq_pages(message: types.Message, page=0):
 
 @dp.callback_query_handler(faq_pagination_callback.filter())
 async def navigate_faq_pages(query: types.CallbackQuery, callback_data: dict):
-    logging.info("navigate_faq_pages called with callback_data: %s", callback_data)
     try:
         page = int(callback_data["page"])
         await bot.delete_message(
@@ -542,7 +544,9 @@ async def navigate_faq_pages(query: types.CallbackQuery, callback_data: dict):
         await query.answer()
     except Exception as e:
         logging.exception("Error in navigate_faq_pages: %s", e)
-        await query.answer("An error occurred.")
+        await query.answer(
+            "Kutilmagan xatolik, iltimos botni qaytadan ishga tushiring. /start"
+        )
 
 
 @dp.message_handler(state=Registration.phone_number)
@@ -579,7 +583,7 @@ async def process_region_selection(
     # Transition to subregion state instead of finishing
     await Registration.subregion.set()
     await query.message.reply(
-        "Please enter the smaller part of the region you live in:"
+        "Endi viloyatdagi hu:"
     )
 
 
@@ -729,7 +733,7 @@ async def display_page(message: types.Message, pages, page):
             )
         await message.answer(message_text, reply_markup=inline_kb)
     else:
-        await message.answer("hech qanday murojaatlar yo'q.")
+        await message.answer("Hali hech qanday murojaatlar yo'q.")
 
 
 @dp.callback_query_handler(pagination_callback.filter())
@@ -751,8 +755,7 @@ async def prompt_for_answer(query: types.CallbackQuery, callback_data: dict):
         "awaiting_response": True,
         "question_id": question_id,
     }
-    print("prompt_for_answer function is running\n\n\n\n\n\n")
-    await query.message.reply(f"ℹ️ Iltimos so'rov uchun javobingizni yozing")
+    await query.message.reply(f"ℹ️ Iltimos murojaat uchun javobingizni yozing")
 
 
 # Pagination callback data for answered questions
@@ -769,7 +772,7 @@ async def show_answered_question(query: types.CallbackQuery, callback_data: dict
     if answer:
         await query.message.answer(f"Question ID: {question_id}\nAnswer: {answer}")
     else:
-        await query.message.answer("No answer found for this question.")
+        await query.message.answer("Bu murojaat uchun javob topilmadi.")
     await query.answer()
 
 
@@ -779,7 +782,7 @@ async def display_answered_questions_page(message: types.Message, page=0):
     if pages:
         questions_page = pages[page]
         inline_kb = InlineKeyboardMarkup(row_width=5)
-        message_text = "Answered Questions:\n\n" + "\n".join(
+        message_text = "Javob berilgan murojaatlar:\n\n" + "\n".join(
             [f"{q_id}. {text}" for q_id, text in questions_page]
         )
         for q_id, _ in questions_page:
@@ -792,7 +795,7 @@ async def display_answered_questions_page(message: types.Message, page=0):
         if page > 0:
             inline_kb.insert(
                 InlineKeyboardButton(
-                    text="<< Previous",
+                    text="<< avvalgisi",
                     callback_data=answered_questions_pagination_callback.new(
                         page=page - 1
                     ),
@@ -801,7 +804,7 @@ async def display_answered_questions_page(message: types.Message, page=0):
         if page < len(pages) - 1:
             inline_kb.insert(
                 InlineKeyboardButton(
-                    text="Next >>",
+                    text="Keyingisi  >>",
                     callback_data=answered_questions_pagination_callback.new(
                         page=page + 1
                     ),
