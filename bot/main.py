@@ -14,7 +14,7 @@ import logging
 import random
 
 
-API_TOKEN = "6195275934:AAEngBypgfNw3SwcV9uV_jdatZtMvojF9cs"
+API_TOKEN = "6806518107:AAHKmoXl1OPVxPc2KaC4BamE3ZLVvnYQJL4"
 option_callback = CallbackData("option", "name")
 answer_callback = CallbackData("answer", "id")
 faq_callback = CallbackData("faq", "id")
