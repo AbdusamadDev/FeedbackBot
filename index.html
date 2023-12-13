@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>WebSocket Video Stream</title>
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            var ws = new WebSocket("ws://localhost:5000/");
+            ws.onmessage = function(event) {
+                var image = document.getElementById('videoFrame');
+                image.src = 'data:image/jpeg;base64,' + event.data;
+            };
+        });
+    </script>
+</head>
+<body>
+    <img id="videoFrame" />
+</body>
+</html>
